@@ -1,0 +1,141 @@
+// ============================================================================
+// Scaly — Schéma Postgres PRÉPARÉ (P1). NON BRANCHÉ : le store actuel est
+// in-memory (src/server/store.ts). Ce schéma est le contrat de migration.
+// Choix assumé : transcript/intelligence en Json au départ (vitesse P1),
+// extraction en colonnes/tables dédiées quand les requêtes analytiques
+// l'exigeront (P3+). Voir docs/DECISIONS.md (ADR-007).
+// ============================================================================
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Company {
+  id              String   @id
+  name            String
+  industry        String
+  sectorLabel     String
+  ownerName       String
+  ownerEmail      String
+  mainPhone       String
+  transferPhone   String
+  city            String
+  languages       String[] // ["fr","en"]
+  defaultLanguage String
+  tone            String
+  hours           Json     // { open, close, days[] }
+  escalationRules Json
+  essentialQuestions String[]
+  services        String[]
+  serviceAreas    String[]
+  policies        String[]
+  followUp        Json
+  compliance      Json
+  planId          String
+  createdAt       DateTime @default(now())
+
+  agents  VoiceAgent[]
+  calls   Call[]
+  actions Action[]
+  audits  AuditLog[]
+  usage   UsagePeriod[]
+}
+
+model VoiceAgent {
+  id                     String  @id
+  companyId              String
+  displayName            String
+  persona                String
+  style                  String
+  languages              String[]
+  greetingScript         String
+  closingScript          String
+  qualificationScriptId  String
+  allowedPhrases         String[]
+  forbiddenPhrases       String[]
+  safetyRules            String[]
+  answerLimits           String[]
+  transferPolicy         String
+  voiceProfile           Json
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@index([companyId])
+}
+
+model Call {
+  id           String   @id
+  companyId    String
+  direction    String
+  status       String
+  source       String
+  fromNumber   String
+  callerName   String?
+  language     String
+  startedAt    DateTime
+  durationSec  Int
+  scriptId     String?
+  personaId    String?
+  seed         Int?
+  transcript   Json     // TranscriptTurn[]
+  intelligence Json?    // CallIntelligence
+  recordingUrl String?
+
+  company Company  @relation(fields: [companyId], references: [id])
+  actions Action[]
+
+  @@index([companyId, startedAt])
+  @@index([companyId, status])
+}
+
+model Action {
+  id         String    @id
+  companyId  String
+  callId     String?
+  type       String
+  title      String
+  payload    Json
+  status     String
+  attempts   Int       @default(0)
+  lastError  String?
+  executor   String
+  executedAt DateTime?
+  createdAt  DateTime  @default(now())
+  audit      Json      // AuditEntry[]
+
+  company Company @relation(fields: [companyId], references: [id])
+  call    Call?   @relation(fields: [callId], references: [id])
+
+  @@index([companyId, status])
+  @@index([callId])
+}
+
+model AuditLog {
+  id        String   @id @default(cuid())
+  companyId String?
+  actor     String
+  event     String
+  detail    String?
+  at        DateTime @default(now())
+
+  company Company? @relation(fields: [companyId], references: [id])
+
+  @@index([companyId, at])
+}
+
+model UsagePeriod {
+  id          String @id @default(cuid())
+  companyId   String
+  periodLabel String // "2026-06"
+  minutesUsed Int
+  callsCount  Int
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, periodLabel])
+}

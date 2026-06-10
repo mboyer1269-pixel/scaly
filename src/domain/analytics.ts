@@ -1,0 +1,78 @@
+/**
+ * Domaine — Analytics & intelligence stratégique
+ * Structures des agrégats du dashboard PME et du cockpit admin/fondateur.
+ */
+import type { Call, Intent } from "./call";
+import type { ScalyAction } from "./action";
+import type { Company } from "./company";
+import type { InvoiceEstimate } from "./billing";
+
+export interface DayBucket {
+  date: string; // "2026-06-09"
+  total: number;
+  missed: number;
+}
+
+export interface StrategicInsight {
+  id: string;
+  kind: "opportunite" | "risque" | "tendance" | "objection" | "recommandation";
+  title: string;
+  detail: string;
+  impactCad?: number;
+  callIds: string[];
+}
+
+export interface DashboardData {
+  periodDays: number;
+  callsTotal: number;
+  answeredByAi: number;
+  missed: number;
+  transferred: number;
+  urgentOpen: number;
+  savedCount: number;
+  savedValueCad: number;
+  missedValueAtRiskCad: number;
+  pipelineValueCad: number;
+  avgDurationSec: number;
+  byDay: DayBucket[];
+  byIntent: { intent: Intent; count: number }[];
+  hotOpportunities: Call[];
+  atRiskCalls: Call[];
+  recentCalls: Call[];
+  pendingActions: ScalyAction[];
+  insights: StrategicInsight[];
+}
+
+export interface ProviderHealth {
+  name: string;
+  status: "operationnel" | "non_configure" | "degrade";
+  note: string;
+}
+
+export interface AdminIncident {
+  id: string;
+  at: string;
+  severity: "mineur" | "majeur";
+  title: string;
+  status: "ouvert" | "resolu";
+}
+
+export interface AdminCompanyRow {
+  company: Company;
+  calls14d: number;
+  minutes: number;
+  estAiCostCad: number;
+  planPriceCad: number;
+  estMarginCad: number;
+  invoice: InvoiceEstimate;
+}
+
+export interface AdminOverview {
+  mrrCad: number;
+  totalMinutes: number;
+  totalAiCostCad: number;
+  grossMarginCad: number;
+  rows: AdminCompanyRow[];
+  providerHealth: ProviderHealth[];
+  incidents: AdminIncident[];
+}

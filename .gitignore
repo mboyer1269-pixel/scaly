@@ -1,0 +1,11 @@
+node_modules/
+.next/
+out/
+*.log
+.env
+.env.local
+.install.done
+.build.done
+tsconfig.tsbuildinfo
+next-env.d.ts
+install.log
