@@ -7,6 +7,9 @@
  */
 import { describe, expect, it } from "vitest";
 import { InMemoryStore } from "@/server/store";
+import { runVoiceScenario } from "@/services/voice-lab";
+import { voiceSessionToRecord } from "@/services/voice-convert";
+import { VOICE_SCENARIOS } from "@/data/voice-scenarios";
 
 describe("purgeExpiredTranscripts", () => {
   it("vide les transcripts expirés mais conserve l'intelligence", async () => {
@@ -33,8 +36,26 @@ describe("purgeExpiredTranscripts", () => {
 
   it("ne purge rien à l'intérieur de la fenêtre de rétention", async () => {
     const store = new InMemoryStore();
-    const { purged } = await store.purgeExpiredTranscripts(new Date());
+    const { purged, voicePurged } = await store.purgeExpiredTranscripts(new Date());
     // Le seed couvre ~13 jours ; toutes les rétentions configurées sont plus longues.
     expect(purged).toBe(0);
+    expect(voicePurged).toBe(0);
+  });
+
+  it("purge le verbatim des sessions vocales mais conserve fiche et télémétrie", async () => {
+    const store = new InMemoryStore();
+    const session = runVoiceScenario(VOICE_SCENARIOS[0]);
+    await store.saveVoiceSession(voiceSessionToRecord(session));
+
+    const farFuture = new Date(Date.now() + 3650 * 86_400_000);
+    const { voicePurged } = await store.purgeExpiredTranscripts(farFuture);
+    expect(voicePurged).toBe(1);
+
+    const after = await store.getVoiceSession(session.id);
+    expect(after?.turns).toEqual([]);
+    expect(after?.events).toEqual([]);
+    // L'agrégé survit : champs qualifiés et télémétrie restent consultables.
+    expect(after?.fields.some((f) => f.value)).toBe(true);
+    expect(after?.telemetry.turnCount).toBeGreaterThan(0);
   });
 });

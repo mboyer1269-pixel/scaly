@@ -115,6 +115,26 @@ model Action {
   @@index([callId])
 }
 
+// Session du Voice Runtime Lab (P2A). Rétention Loi 25 : `turns` et `events`
+// contiennent du verbatim → purgés après retentionDays (mêmes règles que
+// Call.transcript). `fields` et `telemetry` sont agrégés → conservés.
+model VoiceSession {
+  id         String    @id
+  companyId  String
+  scenarioId String?
+  status     String
+  language   String
+  startedAt  DateTime
+  endedAt    DateTime?
+  turns      Json // VoiceTurn[] — verbatim, purgeable
+  events     Json // VoiceRuntimeEvent[] — verbatim, purgeable
+  fields     Json // VoiceFieldState[] — agrégé, conservé
+  telemetry  Json // VoiceRuntimeTelemetry — agrégé, conservé
+  callId     String?
+
+  @@index([companyId, startedAt])
+}
+
 model AuditLog {
   id        String   @id @default(cuid())
   companyId String?

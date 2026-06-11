@@ -9,8 +9,10 @@ import type {
   VoiceAgent as VoiceAgentRow,
   Call as CallRow,
   Action as ActionRow,
+  VoiceSession as VoiceSessionRow,
 } from "@prisma/client";
 import type { Call, CallIntelligence, TranscriptTurn } from "@/domain/call";
+import type { VoiceFieldState, VoiceRuntimeEvent, VoiceRuntimeState, VoiceRuntimeTelemetry, VoiceSessionRecord, VoiceTurn } from "@/domain/voice";
 import type { AuditEntry, ScalyAction } from "@/domain/action";
 import type { BusinessHours, Company, CompliancePolicy, EscalationRule, FollowUpPreferences, LanguageCode } from "@/domain/company";
 import type { VoiceAgentConfig, VoiceProfile } from "@/domain/agent";
@@ -195,6 +197,40 @@ export function actionFromDb(row: ActionRow): ScalyAction {
   };
 }
 
+export function voiceSessionToDb(r: VoiceSessionRecord): Prisma.VoiceSessionCreateInput {
+  return {
+    id: r.id,
+    companyId: r.companyId,
+    scenarioId: r.scenarioId ?? null,
+    status: r.status,
+    language: r.language,
+    startedAt: new Date(r.startedAt),
+    endedAt: r.endedAt ? new Date(r.endedAt) : null,
+    turns: asJson(r.turns),
+    events: asJson(r.events),
+    fields: asJson(r.fields),
+    telemetry: asJson(r.telemetry),
+    callId: r.callId ?? null,
+  };
+}
+
+export function voiceSessionFromDb(row: VoiceSessionRow): VoiceSessionRecord {
+  return {
+    id: row.id,
+    companyId: row.companyId,
+    scenarioId: row.scenarioId ?? undefined,
+    status: row.status as VoiceRuntimeState,
+    language: row.language as LanguageCode,
+    startedAt: row.startedAt.toISOString(),
+    endedAt: row.endedAt?.toISOString(),
+    turns: row.turns as unknown as VoiceTurn[],
+    events: row.events as unknown as VoiceRuntimeEvent[],
+    fields: row.fields as unknown as VoiceFieldState[],
+    telemetry: row.telemetry as unknown as VoiceRuntimeTelemetry,
+    callId: row.callId ?? undefined,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
@@ -344,9 +380,30 @@ export class PrismaStore implements ScalyRepository {
     });
   }
 
-  async purgeExpiredTranscripts(now = new Date()): Promise<{ purged: number }> {
+  async saveVoiceSession(record: VoiceSessionRecord): Promise<VoiceSessionRecord> {
+    const data = voiceSessionToDb(record);
+    await prisma.voiceSession.upsert({ where: { id: record.id }, create: data, update: data });
+    await this.recordAudit({ companyId: record.companyId, actor: "voice-lab", event: "session_vocale_sauvegardée", detail: record.id });
+    return record;
+  }
+
+  async listVoiceSessions(companyId?: string): Promise<VoiceSessionRecord[]> {
+    const rows = await prisma.voiceSession.findMany({
+      where: companyId ? { companyId } : undefined,
+      orderBy: { startedAt: "desc" },
+    });
+    return rows.map(voiceSessionFromDb);
+  }
+
+  async getVoiceSession(id: string): Promise<VoiceSessionRecord | undefined> {
+    const row = await prisma.voiceSession.findUnique({ where: { id } });
+    return row ? voiceSessionFromDb(row) : undefined;
+  }
+
+  async purgeExpiredTranscripts(now = new Date()): Promise<{ purged: number; voicePurged: number }> {
     const companies = await this.listCompanies();
     let purged = 0;
+    let voicePurged = 0;
     for (const company of companies) {
       const cutoff = new Date(now.getTime() - company.compliance.retentionDays * 86_400_000);
       const res = await prisma.call.updateMany({
@@ -357,16 +414,25 @@ export class PrismaStore implements ScalyRepository {
         },
         data: { transcript: [] },
       });
-      if (res.count > 0) {
+      const vres = await prisma.voiceSession.updateMany({
+        where: {
+          companyId: company.id,
+          startedAt: { lt: cutoff },
+          NOT: { turns: { equals: [] } },
+        },
+        data: { turns: [], events: [] },
+      });
+      if (res.count > 0 || vres.count > 0) {
         purged += res.count;
+        voicePurged += vres.count;
         await this.recordAudit({
           companyId: company.id,
           actor: "system",
           event: "transcripts_purgés",
-          detail: `${res.count} appels · rétention ${company.compliance.retentionDays} j`,
+          detail: `${res.count} appels, ${vres.count} sessions vocales · rétention ${company.compliance.retentionDays} j`,
         });
       }
     }
-    return { purged };
+    return { purged, voicePurged };
   }
 }

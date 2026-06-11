@@ -12,6 +12,7 @@ import type { Call } from "@/domain/call";
 import type { ScalyAction } from "@/domain/action";
 import type { Company } from "@/domain/company";
 import type { VoiceAgentConfig } from "@/domain/agent";
+import type { VoiceSessionRecord } from "@/domain/voice";
 import { buildSeedData } from "./seed";
 import { PrismaStore } from "./prisma-store";
 
@@ -61,12 +62,16 @@ export interface ScalyRepository {
   saveAction(action: ScalyAction): Promise<ScalyAction>;
   getAuditLog(limit?: number): Promise<ComplianceAuditEntry[]>;
   recordAudit(entry: Omit<ComplianceAuditEntry, "at">): Promise<void>;
+  /** Persiste une session du Voice Lab (upsert — turns/events purgeables Loi 25). */
+  saveVoiceSession(record: VoiceSessionRecord): Promise<VoiceSessionRecord>;
+  listVoiceSessions(companyId?: string): Promise<VoiceSessionRecord[]>;
+  getVoiceSession(id: string): Promise<VoiceSessionRecord | undefined>;
   /**
-   * Purge Loi 25 : vide les transcripts des appels plus vieux que le
-   * `compliance.retentionDays` de chaque compagnie (l'intelligence agrégée est
-   * conservée, le verbatim est supprimé). Retourne le nombre d'appels purgés.
+   * Purge Loi 25 : vide les transcripts des appels ET les turns/events des
+   * sessions vocales plus vieux que le `compliance.retentionDays` de chaque
+   * compagnie (l'intelligence agrégée est conservée, le verbatim est supprimé).
    */
-  purgeExpiredTranscripts(now?: Date): Promise<{ purged: number }>;
+  purgeExpiredTranscripts(now?: Date): Promise<{ purged: number; voicePurged: number }>;
 }
 
 /** Exporté pour les tests : instanciation directe, sans passer par l'env (jamais de vraie base en test). */
@@ -75,6 +80,7 @@ export class InMemoryStore implements ScalyRepository {
   private agents = new Map<string, VoiceAgentConfig>(); // clé : companyId
   private calls = new Map<string, Call>();
   private actions = new Map<string, ScalyAction>();
+  private voiceSessions = new Map<string, VoiceSessionRecord>();
   private audit: ComplianceAuditEntry[] = [];
 
   constructor() {
@@ -182,8 +188,25 @@ export class InMemoryStore implements ScalyRepository {
     this.audit.push({ ...entry, at: new Date().toISOString() });
   }
 
-  async purgeExpiredTranscripts(now = new Date()): Promise<{ purged: number }> {
+  async saveVoiceSession(record: VoiceSessionRecord): Promise<VoiceSessionRecord> {
+    this.voiceSessions.set(record.id, record);
+    await this.recordAudit({ companyId: record.companyId, actor: "voice-lab", event: "session_vocale_sauvegardée", detail: record.id });
+    return record;
+  }
+
+  async listVoiceSessions(companyId?: string): Promise<VoiceSessionRecord[]> {
+    return [...this.voiceSessions.values()]
+      .filter((s) => !companyId || s.companyId === companyId)
+      .sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
+  }
+
+  async getVoiceSession(id: string): Promise<VoiceSessionRecord | undefined> {
+    return this.voiceSessions.get(id);
+  }
+
+  async purgeExpiredTranscripts(now = new Date()): Promise<{ purged: number; voicePurged: number }> {
     let purged = 0;
+    let voicePurged = 0;
     for (const company of this.companies.values()) {
       const cutoff = new Date(now.getTime() - company.compliance.retentionDays * 86_400_000);
       for (const call of this.calls.values()) {
@@ -192,11 +215,17 @@ export class InMemoryStore implements ScalyRepository {
           purged += 1;
         }
       }
-      if (purged > 0) {
+      for (const vs of this.voiceSessions.values()) {
+        if (vs.companyId === company.id && (vs.turns.length > 0 || vs.events.length > 0) && new Date(vs.startedAt) < cutoff) {
+          this.voiceSessions.set(vs.id, { ...vs, turns: [], events: [] });
+          voicePurged += 1;
+        }
+      }
+      if (purged > 0 || voicePurged > 0) {
         await this.recordAudit({ companyId: company.id, actor: "system", event: "transcripts_purgés", detail: `rétention ${company.compliance.retentionDays} j` });
       }
     }
-    return { purged };
+    return { purged, voicePurged };
   }
 }
 
