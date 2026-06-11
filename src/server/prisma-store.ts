@@ -15,6 +15,8 @@ import type { Call, CallIntelligence, TranscriptTurn } from "@/domain/call";
 import type { VoiceFieldState, VoiceRuntimeEvent, VoiceRuntimeState, VoiceRuntimeTelemetry, VoiceSessionRecord, VoiceTurn } from "@/domain/voice";
 import type { AuditEntry, ScalyAction } from "@/domain/action";
 import type { BusinessHours, Company, CompliancePolicy, EscalationRule, FollowUpPreferences, LanguageCode } from "@/domain/company";
+import type { ConsentRecord } from "@/domain/consent";
+import { canonicalPhone } from "@/domain/consent";
 import type { VoiceAgentConfig, VoiceProfile } from "@/domain/agent";
 import type { ComplianceAuditEntry, LiveCheck, ScalyRepository, StoreInfo } from "./store";
 import { prisma } from "./prisma";
@@ -380,6 +382,55 @@ export class PrismaStore implements ScalyRepository {
         detail: entry.detail ?? null,
       },
     });
+  }
+
+  async listConsents(companyId?: string, phone?: string): Promise<ConsentRecord[]> {
+    const rows = await prisma.consent.findMany({
+      where: {
+        ...(companyId ? { companyId } : {}),
+        ...(phone ? { phone: canonicalPhone(phone) } : {}),
+      },
+      orderBy: { capturedAt: "desc" },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      companyId: r.companyId,
+      phone: r.phone,
+      kind: r.kind as ConsentRecord["kind"],
+      status: r.status as ConsentRecord["status"],
+      verbatim: r.verbatim,
+      channel: r.channel as ConsentRecord["channel"],
+      sourceCallId: r.sourceCallId ?? undefined,
+      capturedAt: r.capturedAt.toISOString(),
+      revokedAt: r.revokedAt?.toISOString(),
+      revokedVia: r.revokedVia ?? undefined,
+    }));
+  }
+
+  async saveConsent(record: ConsentRecord): Promise<ConsentRecord> {
+    const data = {
+      id: record.id,
+      companyId: record.companyId,
+      phone: record.phone,
+      kind: record.kind,
+      status: record.status,
+      verbatim: record.verbatim,
+      channel: record.channel,
+      sourceCallId: record.sourceCallId ?? null,
+      capturedAt: new Date(record.capturedAt),
+      revokedAt: record.revokedAt ? new Date(record.revokedAt) : null,
+      revokedVia: record.revokedVia ?? null,
+    };
+    await prisma.consent.upsert({ where: { id: record.id }, create: data, update: data });
+    return record;
+  }
+
+  async revokeConsents(companyId: string, phone: string, via: string, now = new Date()): Promise<number> {
+    const r = await prisma.consent.updateMany({
+      where: { companyId, phone: canonicalPhone(phone), status: { not: "revoque" } },
+      data: { status: "revoque", revokedAt: now, revokedVia: via },
+    });
+    return r.count;
   }
 
   async saveVoiceSession(record: VoiceSessionRecord): Promise<VoiceSessionRecord> {

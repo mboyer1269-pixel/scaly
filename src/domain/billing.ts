@@ -52,7 +52,7 @@ export const PLANS: Record<PlanId, Plan> = {
     maxAgents: 1,
     setupFeeCad: 500,
     features: [
-      "1 agent vocal (FR ou EN)",
+      "1 agent vocal en français d'abord (conforme Loi 96)",
       "Réception + qualification + résumé d'appel",
       "SMS de rappel d'appel manqué",
       "Tableau de bord et journaux d'appels",

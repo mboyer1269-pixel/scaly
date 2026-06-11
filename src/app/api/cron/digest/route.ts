@@ -31,8 +31,12 @@ async function handle(req: Request) {
     const calls = await store.listCalls(company.id);
     const actions = await store.listActions(company.id);
 
-    // 1) Suivis de soumission J+2 (consentement obligatoire) — planifiés puis tentés.
-    const followUps = planQuoteFollowUps(company, calls, actions);
+    // 1) Suivis de soumission J+2 (consentement obligatoire) — planifiés puis
+    // tentés. Le coffre (ADR-018) fournit les révocations : STOP = plus rien.
+    const revoked = new Set(
+      (await store.listConsents(company.id)).filter((x) => x.status === "revoque").map((x) => x.phone),
+    );
+    const followUps = planQuoteFollowUps(company, calls, actions, new Date(), revoked);
     for (const fu of followUps) {
       const executed = await executeActionLive(fu);
       await store.saveAction(executed);

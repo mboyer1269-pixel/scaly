@@ -5,8 +5,14 @@
 
 ## Cadre applicable
 - **Loi 25 (Québec)** : consentement, transparence sur les moyens technologiques, minimisation, droit à l'effacement, registre des incidents, responsable de la protection des renseignements personnels (RPRP) à désigner.
+- **Loi 96 (Québec, Charte de la langue française)** : une entreprise qui sert le public au Québec doit pouvoir le servir EN FRANÇAIS. Une réceptionniste (humaine ou IA) anglophone-seulement expose l'entreprise à des plaintes à l'OQLF. **Côté Scaly c'est une force, pas une contrainte** : le français d'abord est notre défaut de conception (accueil FR, bascule EN sur demande de l'appelant — conforme), et chaque concurrent EN-only au Québec a un problème de Loi 96 que nous n'avons pas. Argument de vente documenté, à utiliser tel quel.
 - **PIPEDA (fédéral)** : finalités, consentement, mesures de sécurité.
 - **Enregistrement d'appels** : le Canada permet le consentement d'une seule partie, MAIS la transparence Loi 25 + la confiance client imposent l'annonce. Décision produit : mention d'enregistrement annoncée quand l'enregistrement est actif, point.
+
+## Coffre de consentements (ADR-018) — implémenté
+- Le consentement est un objet de première classe PAR PERSONNE (numéro canonique), plus seulement une note dans la fiche d'un appel : verbatim exact + canal + appel source + horodatage. Registre visible dans `/consents`.
+- **Retrait aussi simple que le consentement** (exigence Loi 25) : un texto « STOP / ARRÊT » de n'importe quel appelant révoque tous ses consentements immédiatement, tracé dans l'audit, et la barrière de relance (J+2 et toute relance future) le respecte sans exception. Une révocation n'est jamais ressuscitée par automatisme.
+- Le REFUS est enregistré au même titre que le oui : ne pas re-solliciter quelqu'un qui a dit non.
 
 ## Ce qui est DÉJÀ implémenté (P0)
 - `CompliancePolicy` par entreprise : divulgation IA, enregistrement on/off, mention d'enregistrement, rétention (jours), minimisation PII — modifiable dans l'UI Réglages.
