@@ -60,7 +60,9 @@ export function openAiSessionUpdate(systemPrompt: string, voice: string, model =
       audio: {
         input: {
           format: { type: "audio/pcmu" },
-          turn_detection: { type: "server_vad" },
+          // 350 ms de silence (défaut 500) : turn-taking plus vif — la lenteur
+          // perçue au premier appel venait des pauses, pas du modèle (367 ms mesurées).
+          turn_detection: { type: "server_vad", silence_duration_ms: 350 },
           transcription: { model: "whisper-1" },
         },
         output: {

@@ -316,7 +316,8 @@ export const INDUSTRY_SCRIPTS: IndustryScript[] = [
       Q("moment", "C'est pour maintenant ou on planifie un moment ?", "Is this for right now, or should we schedule?"),
     ],
     urgencyCriteria: [
-      { keywords: ["fuite", "inondé", "l'eau monte", "dégât d'eau", "plus de chauffage", "court-circuit", "odeur de gaz", "refoule", "c'est une urgence"], level: "critique", note: "Urgence résidentielle active" },
+      // « eau partout » / « plein d'eau » : formulations réelles entendues au premier appel live (2026-06-11).
+      { keywords: ["fuite", "inondé", "inondation", "l'eau monte", "eau partout", "plein d'eau", "dégât d'eau", "plafond coule", "plus de chauffage", "court-circuit", "odeur de gaz", "refoule", "c'est une urgence"], level: "critique", note: "Urgence résidentielle active" },
       { keywords: ["aujourd'hui", "le plus vite possible"], level: "haute", note: "Demande rapide" },
     ],
     transferCriteria: [...COMMON_TRANSFERS, { condition: "Odeur de gaz ou danger électrique → consignes de sécurité + transfert immédiat", keywords: ["gaz", "étincelles", "fumée"] }],
