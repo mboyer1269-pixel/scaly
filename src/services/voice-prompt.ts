@@ -17,11 +17,22 @@ export interface RealtimePromptContext {
   company: Company;
   agent: VoiceAgentConfig;
   script: IndustryScript;
+  /** Numéro de l'afficheur (Twilio `From`) — si connu, on CONFIRME au lieu de faire dicter. */
+  callerNumber?: string;
 }
 
-export function buildRealtimePrompt({ company, agent, script }: RealtimePromptContext): string {
+/** « +18194211269 » → « 819 421-1269 » (lisible à voix haute). Null si non exploitable. */
+export function speakablePhone(raw?: string): string | null {
+  if (!raw) return null;
+  const digits = raw.replace(/\D/g, "").replace(/^1/, "");
+  if (digits.length !== 10) return null; // anonyme, masqué, international : on fait dicter
+  return `${digits.slice(0, 3)} ${digits.slice(3, 6)}-${digits.slice(6)}`;
+}
+
+export function buildRealtimePrompt({ company, agent, script, callerNumber }: RealtimePromptContext): string {
   const lines: string[] = [];
   const fr = company.defaultLanguage === "fr";
+  const callerPhone = speakablePhone(callerNumber);
 
   // --- Identité et divulgation IA (non négociable) ---
   lines.push(`# Identité`);
@@ -64,6 +75,17 @@ export function buildRealtimePrompt({ company, agent, script }: RealtimePromptCo
       `Répète le numéro par groupes (« 819… 421… 12-69, c'est bien ça ? ») et confirme AVANT de passer au champ suivant. ` +
       `Ne mélange JAMAIS deux informations (un numéro n'est pas une adresse).`,
   );
+
+  // --- Numéro de l'afficheur : confirmer, jamais faire dicter ---
+  if (callerPhone) {
+    lines.push(`# Numéro de rappel (tu le connais DÉJÀ)`);
+    lines.push(
+      `L'afficheur te donne le numéro de l'appelant : ${callerPhone}. NE lui demande JAMAIS de dicter son numéro. ` +
+        `À la place, CONFIRME-le simplement : « Est-ce qu'on peut vous rejoindre au numéro que vous nous appelez, le ${callerPhone} ? ». ` +
+        `S'il préfère un autre numéro, note-le par groupes et confirme. S'il s'embrouille dans des chiffres, rassure-le : ` +
+        `« Pas de souci, j'ai votre numéro sur l'afficheur, le ${callerPhone}. » et passe à la suite.`,
+    );
+  }
 
   // --- Langue ---
   lines.push(`# Langue`);

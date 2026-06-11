@@ -126,7 +126,9 @@ function handleTwilioConnection(twilioWs: WebSocket): void {
       void (async () => {
         try {
           const ctx = await fetchContext(log!.companyId);
-          const prompt = buildRealtimePrompt(ctx);
+          // Le numéro de l'afficheur entre dans le prompt : on CONFIRME le
+          // numéro au lieu de le faire dicter (échec observé à l'appel n° 2).
+          const prompt = buildRealtimePrompt({ ...ctx, callerNumber: log!.from });
           // API GA : pas de header OpenAI-Beta (rejeté par le GA).
           openaiWs = new WebSocket(`wss://api.openai.com/v1/realtime?model=${encodeURIComponent(MODEL)}`, {
             headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
