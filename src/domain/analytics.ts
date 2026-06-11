@@ -43,6 +43,40 @@ export interface DashboardData {
   insights: StrategicInsight[];
 }
 
+/**
+ * File de sauvetage (« missed-call rescue ») — le cœur opérationnel du wedge :
+ * chaque appel manqué non récupéré est une perte qui se joue en minutes
+ * (« speed to lead » : la majorité des clients achètent du premier répondant).
+ */
+export type RescueWindow = "fenetre_critique" | "encore_chaud" | "refroidi";
+
+export interface RescueEntry {
+  call: Call;
+  minutesSinceCall: number;
+  window: RescueWindow;
+  valueAtRiskCad: number;
+  /** Un SMS de rappel automatique est déjà planifié/parti pour cet appel. */
+  smsPlanned: boolean;
+  /** Prochaine action recommandée, en clair. */
+  suggested: string;
+}
+
+/** Le ROI en une phrase : ce que Scaly coûte vs ce qu'il protège. */
+export interface RoiSnapshot {
+  periodDays: number;
+  planPriceCad: number;
+  /** Valeur des appels qui auraient été perdus sans Scaly (sauvés). */
+  protectedCad: number;
+  wouldBeLostCount: number;
+  /** Valeur encore à risque (manqués non récupérés). */
+  atRiskCad: number;
+  atRiskCount: number;
+  /** protectedCad / prix du plan — l'argument de renouvellement. */
+  multiple: number | null;
+  /** Appels servis en anglais — la preuve bilingue chiffrée. */
+  enCallsCount: number;
+}
+
 export interface ProviderHealth {
   name: string;
   status: "operationnel" | "non_configure" | "degrade";

@@ -1,0 +1,34 @@
+/**
+ * Middleware — protection Clerk (active seulement si les clés sont présentes).
+ * - Public : accueil, sign-in/up, /api/health (uptime monitoring), cron de purge
+ *   (protégé par CRON_SECRET dans la route elle-même).
+ * - Réservé au rôle founder : /admin, /api/admin, /status.
+ * - Tout le reste exige une session.
+ */
+import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import { NextResponse } from "next/server";
+import { roleFromSessionClaims } from "@/server/auth";
+
+const isPublicRoute = createRouteMatcher(["/", "/sign-in(.*)", "/sign-up(.*)", "/api/health(.*)", "/api/cron/(.*)"]);
+const isFounderRoute = createRouteMatcher(["/admin(.*)", "/api/admin(.*)", "/status(.*)"]);
+
+const authEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY);
+
+export default authEnabled
+  ? clerkMiddleware((auth, req) => {
+      if (isPublicRoute(req)) return;
+      auth().protect();
+      if (isFounderRoute(req) && roleFromSessionClaims(auth().sessionClaims) !== "founder") {
+        return NextResponse.redirect(new URL("/dashboard", req.url));
+      }
+    })
+  : function middleware() {
+      return NextResponse.next();
+    };
+
+export const config = {
+  matcher: [
+    "/((?!_next|[^?]*\\.(?:html?|css|js(?!on)|jpe?g|webp|png|gif|svg|ttf|woff2?|ico|csv|docx?|xlsx?|zip|webmanifest)).*)",
+    "/(api|trpc)(.*)",
+  ],
+};

@@ -7,7 +7,7 @@ import type { VoiceAgentConfig } from "@/domain/agent";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const agent = getStore().getAgentByCompany(DEFAULT_COMPANY_ID);
+  const agent = await getStore().getAgentByCompany(DEFAULT_COMPANY_ID);
   if (!agent) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   return NextResponse.json({ agent });
 }
@@ -21,7 +21,7 @@ export async function PUT(req: Request) {
   }
   delete (patch as Record<string, unknown>).id;
   delete (patch as Record<string, unknown>).companyId;
-  const agent = getStore().updateAgent(DEFAULT_COMPANY_ID, patch);
+  const agent = await getStore().updateAgent(DEFAULT_COMPANY_ID, patch);
   if (!agent) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   return NextResponse.json({ agent });
 }

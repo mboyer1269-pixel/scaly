@@ -6,8 +6,8 @@ import { SettingsForm } from "@/components/SettingsForm";
 
 export const dynamic = "force-dynamic";
 
-export default function SettingsPage() {
-  const company = getStore().getCompany(DEFAULT_COMPANY_ID)!;
+export default async function SettingsPage() {
+  const company = (await getStore().getCompany(DEFAULT_COMPANY_ID))!;
   return (
     <>
       <PageHeader title="Configuration de l'entreprise" subtitle="Ces informations alimentent directement les scripts, l'escalade et la conformité de l'agent" />
