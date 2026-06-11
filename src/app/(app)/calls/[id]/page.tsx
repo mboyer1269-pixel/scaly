@@ -10,6 +10,7 @@ import { INTENT_LABELS, NEXT_ACTION_LABELS } from "@/domain/call";
 import { ACTION_TYPE_LABELS } from "@/domain/action";
 import { FIELD_LABELS, type FieldKey } from "@/domain/script";
 import { formatCad, formatDateTime, formatDuration } from "@/lib/format";
+import { AnalyzeButton } from "@/components/AnalyzeButton";
 
 export const dynamic = "force-dynamic";
 
@@ -100,7 +101,15 @@ export default async function CallDetailPage({ params }: { params: { id: string 
         </div>
 
         <div className="space-y-6 lg:col-span-2">
-          <Card title="Call Intelligence" action={<Badge tone="violet">moteur {intel?.engine ?? "—"}</Badge>}>
+          <Card
+            title="Call Intelligence"
+            action={
+              <span className="inline-flex items-center gap-2">
+                <Badge tone="violet">moteur {intel?.engine ?? "—"}</Badge>
+                {call.transcript.length > 0 && <AnalyzeButton callId={call.id} />}
+              </span>
+            }
+          >
             {!intel && <p className="text-sm text-ink-400">Aucune analyse.</p>}
             {intel && (
               <div className="space-y-4">
@@ -138,7 +147,9 @@ export default async function CallDetailPage({ params }: { params: { id: string 
                   </div>
                 )}
                 <HonestyNote>
-                  Analyse produite par le moteur heuristique rules-v1 (mots-clés + règles de script). Le moteur LLM (P1) utilisera la même interface et les mêmes structures.
+                  {intel.engine === "llm"
+                    ? "Analyse produite par le moteur LLM (transcript brut, sortie structurée validée). Valeur et score recalculés par le barème déterministe."
+                    : "Analyse produite par le moteur heuristique rules-v1 (mots-clés + règles de script). Cliquez « Analyser avec le LLM » pour comparer."}
                 </HonestyNote>
               </div>
             )}
