@@ -37,7 +37,10 @@ Infra : file d'attente pg-boss + workers ; idempotence par action.id ; retries e
 **KPI** : 3-5 PME pilotes payantes ; > 95 % d'actions réussies ; temps de rappel d'appel manqué < 2 min.
 
 ## P4 — Monétisation & durcissement (≈ 2-3 semaines)
-Stripe (abonnements + minutes excédentaires + frais d'installation — logique déjà dans domain/billing), portail client, alertes de dépassement, rate limiting, RLS Postgres, pentest léger, SLA internes, runbooks.
+**Livré** :
+**P4.1 — Pricing public honnête ✅** : `/pricing` — plans de domain/billing publiés (mensuel CAD, minutes incluses, dépassement affiché, frais d'installation), engagements anti-irritants (spam non facturé, transferts humains inclus, arrondi mensuel pas par appel).
+**P4.2 — Stripe ✅ (activation = STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET)** : checkout abonnement à prix inline (aucun produit à créer dans le dashboard Stripe), webhook signé (HMAC vérifié, rejeu refusé) seul autorisé à écrire `company.billing` + `planId`, portail client dans /settings, audit « stripe » sur chaque mouvement. **Minutes excédentaires : PAS de metered billing en pilote — facturation manuelle au tarif publié** (décision assumée, à automatiser quand le volume le justifie).
+**Restants P4** : alertes de dépassement, rate limiting, RLS Postgres, pentest léger, SLA internes, runbooks.
 **KPI** : facturation automatique sans intervention ; marge brute par client visible et > 70 % (modèle interne).
 
 ## P5 — Échelle produit

@@ -18,9 +18,14 @@ export default function HomePage() {
           <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-scaly-500 text-sm font-black">S</span>
           <span className="text-lg font-bold">Scaly</span>
         </div>
-        <Link href="/dashboard" className="rounded-lg bg-white/10 px-4 py-2 text-sm font-medium hover:bg-white/20">
-          Ouvrir le dashboard démo
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/pricing" className="rounded-lg px-4 py-2 text-sm font-medium text-ink-200 hover:bg-white/10">
+            Prix
+          </Link>
+          <Link href="/dashboard" className="rounded-lg bg-white/10 px-4 py-2 text-sm font-medium hover:bg-white/20">
+            Ouvrir le dashboard démo
+          </Link>
+        </div>
       </header>
 
       <section className="mx-auto max-w-6xl px-6 pb-20 pt-16 text-center">
