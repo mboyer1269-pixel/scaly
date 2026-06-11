@@ -6,7 +6,7 @@
  */
 import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
-import { DEFAULT_COMPANY_ID } from "@/data/companies";
+import { resolveCompanyId } from "@/server/tenant";
 import { draftFromWebsite, OnboardingNotConfiguredError } from "@/services/onboarding";
 import { clientKey, createRateLimiter, tooManyRequests } from "@/lib/rate-limit";
 
@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   try {
     const result = await draftFromWebsite(body.url.trim(), (body.blurb ?? "").slice(0, 600));
     await getStore().recordAudit({
-      companyId: DEFAULT_COMPANY_ID,
+      companyId: resolveCompanyId(),
       actor: "onboarding",
       event: "brouillon_genere",
       detail: `${body.url} · ${result.sourceChars} caractères analysés · en attente d'approbation`,

@@ -4,7 +4,7 @@
  */
 import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
-import { DEFAULT_COMPANY_ID } from "@/data/companies";
+import { resolveCompanyId } from "@/server/tenant";
 import { PLANS, type PlanId } from "@/domain/billing";
 import { createCheckoutSession, isStripeConfigured, stripeConfigHint } from "@/adapters/integrations/stripe";
 import { clientKey, createRateLimiter, tooManyRequests } from "@/lib/rate-limit";
@@ -32,10 +32,12 @@ export async function POST(req: Request) {
   }
 
   const origin = req.headers.get("origin") ?? new URL(req.url).origin;
+  // Visiteur anonyme de /pricing → tenant démo ; session connectée → son entreprise.
+  const companyId = resolveCompanyId();
   try {
-    const session = await createCheckoutSession(planId, DEFAULT_COMPANY_ID, origin);
+    const session = await createCheckoutSession(planId, companyId, origin);
     await getStore().recordAudit({
-      companyId: DEFAULT_COMPANY_ID,
+      companyId,
       actor: "stripe",
       event: "checkout_créé",
       detail: `Plan ${PLANS[planId].label} (${PLANS[planId].priceMonthlyCad} $/mois) — session ${session.id}`,

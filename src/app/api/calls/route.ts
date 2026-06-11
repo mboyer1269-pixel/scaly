@@ -1,13 +1,16 @@
 /** GET /api/calls — liste des appels (filtres : status, urgency, intent, q). */
 import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
-import { DEFAULT_COMPANY_ID } from "@/data/companies";
+import { getSessionRole } from "@/server/auth";
+import { resolveCompanyId } from "@/server/tenant";
 
 export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const url = new URL(req.url);
-  const companyId = url.searchParams.get("companyId") ?? DEFAULT_COMPANY_ID;
+  // ?companyId= : réservé au fondateur (vue cross-tenant de /admin) — sinon le tenant de la session.
+  const requested = url.searchParams.get("companyId");
+  const companyId = requested && getSessionRole() === "founder" ? requested : resolveCompanyId();
   const status = url.searchParams.get("status");
   const urgency = url.searchParams.get("urgency");
   const intent = url.searchParams.get("intent");

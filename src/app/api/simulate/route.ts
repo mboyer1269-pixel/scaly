@@ -5,7 +5,7 @@
  */
 import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
-import { DEFAULT_COMPANY_ID } from "@/data/companies";
+import { resolveCompanyId } from "@/server/tenant";
 import { getPersonaById, PERSONAS } from "@/data/personas";
 import { getScriptById, getScriptByIndustry, INDUSTRY_SCRIPTS } from "@/data/industry-scripts";
 import { simulateCall } from "@/services/simulator";
@@ -36,9 +36,10 @@ export async function POST(req: Request) {
   }
 
   const store = getStore();
-  const company = await store.getCompany(DEFAULT_COMPANY_ID);
-  const agent = await store.getAgentByCompany(DEFAULT_COMPANY_ID);
-  if (!company || !agent) return NextResponse.json({ error: "Compagnie de démonstration introuvable" }, { status: 500 });
+  const companyId = resolveCompanyId();
+  const company = await store.getCompany(companyId);
+  const agent = await store.getAgentByCompany(companyId);
+  if (!company || !agent) return NextResponse.json({ error: "Compagnie introuvable" }, { status: 500 });
 
   const script = body.scriptId
     ? getScriptById(body.scriptId)

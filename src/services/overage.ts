@@ -1,9 +1,9 @@
 /**
  * Service — Alertes de dépassement de minutes (P4). Fonctions PURES.
  *
- * L'usage du mois = somme des durées d'appels du mois civil courant (même
- * calcul que l'admin/facture : computeInvoice arrondit le TOTAL, pas chaque
- * appel — c'est l'engagement public de /pricing).
+ * L'usage du mois = minutes FACTURABLES (spam exclu — services/usage.ts),
+ * exactement ce que la facture compterait : l'alerte et la facture ne
+ * divergent jamais.
  *
  * Deux seuils, une seule alerte par seuil et par mois (dédupliquée via
  * l'audit trail) : 80 % « approche » et 100 % « dépassé » avec l'estimation
@@ -13,6 +13,7 @@ import type { Call } from "@/domain/call";
 import type { Company } from "@/domain/company";
 import type { ComplianceAuditEntry } from "@/server/store";
 import { computeInvoice, PLANS } from "@/domain/billing";
+import { computeMonthUsage } from "@/services/usage";
 
 export const OVERAGE_AUDIT_EVENT = "alerte_dépassement";
 export const APPROACH_RATIO = 0.8;
@@ -29,21 +30,10 @@ export function monthPeriodLabel(now: Date): string {
   return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}`;
 }
 
-/** Minutes consommées sur le mois civil de `now` (somme des durées, non arrondie par appel). */
-export function computeMonthMinutes(calls: Call[], now: Date): number {
-  const totalSec = calls
-    .filter((c) => {
-      const at = new Date(c.startedAt);
-      return at.getFullYear() === now.getFullYear() && at.getMonth() === now.getMonth();
-    })
-    .reduce((s, c) => s + c.durationSec, 0);
-  return totalSec / 60;
-}
-
-/** Alerte à émettre pour ce mois, ou null si sous le seuil d'approche. */
+/** Alerte à émettre pour ce mois (minutes FACTURABLES), ou null sous le seuil d'approche. */
 export function buildOverageAlert(company: Company, calls: Call[], now = new Date()): OverageAlert | null {
   const plan = PLANS[company.planId];
-  const minutesUsed = computeMonthMinutes(calls, now);
+  const minutesUsed = computeMonthUsage(calls, now).billableMinutes;
   if (minutesUsed < plan.includedMinutes * APPROACH_RATIO) return null;
 
   const periodLabel = monthPeriodLabel(now);

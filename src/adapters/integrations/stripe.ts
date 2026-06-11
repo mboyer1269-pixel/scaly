@@ -130,6 +130,8 @@ export interface StripeEvent {
 }
 
 export interface BillingUpdate {
+  /** Tenant ciblé — métadonnées posées au checkout (metadata + subscription_data.metadata). */
+  companyId?: string;
   planId?: PlanId;
   billing: Partial<CompanyBilling>;
   auditDetail: string;
@@ -139,10 +141,15 @@ export interface BillingUpdate {
 export function interpretStripeEvent(event: StripeEvent): BillingUpdate | null {
   const obj = event.data.object;
   const meta = (obj.metadata ?? {}) as Record<string, string>;
+  const companyId =
+    (typeof meta.companyId === "string" && meta.companyId) ||
+    (typeof obj.client_reference_id === "string" && obj.client_reference_id) ||
+    undefined;
 
   if (event.type === "checkout.session.completed") {
     const planId = meta.planId as PlanId | undefined;
     return {
+      companyId,
       planId: planId && PLANS[planId] ? planId : undefined,
       billing: {
         stripeCustomerId: typeof obj.customer === "string" ? obj.customer : undefined,
@@ -157,6 +164,7 @@ export function interpretStripeEvent(event: StripeEvent): BillingUpdate | null {
     const planId = meta.planId as PlanId | undefined;
     const periodEnd = typeof obj.current_period_end === "number" ? new Date(obj.current_period_end * 1000).toISOString() : undefined;
     return {
+      companyId,
       planId: planId && PLANS[planId] ? planId : undefined,
       billing: {
         subscriptionStatus: typeof obj.status === "string" ? obj.status : undefined,
@@ -168,6 +176,7 @@ export function interpretStripeEvent(event: StripeEvent): BillingUpdate | null {
 
   if (event.type === "customer.subscription.deleted") {
     return {
+      companyId,
       billing: { subscriptionStatus: "canceled" },
       auditDetail: `Abonnement annulé (${event.id})`,
     };

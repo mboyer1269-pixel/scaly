@@ -7,7 +7,7 @@
  */
 import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
-import { DEFAULT_COMPANY_ID } from "@/data/companies";
+import { resolveCompanyId } from "@/server/tenant";
 import { INDUSTRY_LABELS } from "@/domain/company";
 import { getScriptByIndustry } from "@/data/industry-scripts";
 import { validateDraft } from "@/services/onboarding";
@@ -29,13 +29,14 @@ export async function POST(req: Request) {
   }
 
   const store = getStore();
-  const existing = await store.getCompany(DEFAULT_COMPANY_ID);
+  const companyId = resolveCompanyId();
+  const existing = await store.getCompany(companyId);
   if (!existing) return NextResponse.json({ error: "Entreprise introuvable" }, { status: 404 });
 
   const draft = validateDraft(body.draft, existing.name);
   const script = getScriptByIndustry(draft.industry);
 
-  const company = await store.updateCompany(DEFAULT_COMPANY_ID, {
+  const company = await store.updateCompany(companyId, {
     name: draft.name,
     industry: draft.industry,
     sectorLabel: INDUSTRY_LABELS[draft.industry],
@@ -46,14 +47,14 @@ export async function POST(req: Request) {
     defaultLanguage: draft.languages[0],
     tone: draft.tone,
   });
-  const agent = await store.updateAgent(DEFAULT_COMPANY_ID, {
+  const agent = await store.updateAgent(companyId, {
     persona: draft.persona,
     languages: draft.languages,
     qualificationScriptId: script.id,
   });
 
   await store.recordAudit({
-    companyId: DEFAULT_COMPANY_ID,
+    companyId,
     actor: "onboarding",
     event: "brouillon_approuvé",
     detail: `${draft.name} · ${INDUSTRY_LABELS[draft.industry]} · script ${script.id} · approuvé par le propriétaire`,

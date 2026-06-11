@@ -5,6 +5,8 @@
  */
 import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
+import { getSessionRole } from "@/server/auth";
+import { resolveCompanyId } from "@/server/tenant";
 import { getScriptById, getScriptByIndustry } from "@/data/industry-scripts";
 import { llmIntelligenceEngine, LlmNotConfiguredError } from "@/services/llm-intelligence";
 
@@ -13,7 +15,10 @@ export const dynamic = "force-dynamic";
 export async function POST(_req: Request, { params }: { params: { id: string } }) {
   const store = getStore();
   const call = await store.getCall(params.id);
-  if (!call) return NextResponse.json({ error: "Appel introuvable" }, { status: 404 });
+  // Garde d'appartenance (anti-IDOR) : même contrat que GET /api/calls/:id.
+  if (!call || (call.companyId !== resolveCompanyId() && getSessionRole() !== "founder")) {
+    return NextResponse.json({ error: "Appel introuvable" }, { status: 404 });
+  }
 
   const company = await store.getCompany(call.companyId);
   const script = (call.scriptId ? getScriptById(call.scriptId) : undefined) ?? (company ? getScriptByIndustry(company.industry) : undefined);

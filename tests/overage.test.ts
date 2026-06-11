@@ -2,7 +2,9 @@ import { describe, expect, it } from "vitest";
 import type { Call } from "@/domain/call";
 import { SEED_COMPANIES } from "@/data/companies";
 import { PLANS } from "@/domain/billing";
-import { alertAlreadySent, buildOverageAlert, computeMonthMinutes, overageAuditDetail, OVERAGE_AUDIT_EVENT } from "@/services/overage";
+import { alertAlreadySent, buildOverageAlert, overageAuditDetail, OVERAGE_AUDIT_EVENT } from "@/services/overage";
+import { computeMonthUsage, estimateMonthInvoice, isBillableCall } from "@/services/usage";
+import type { CallIntelligence } from "@/domain/call";
 import { createRateLimiter } from "@/lib/rate-limit";
 
 const company = SEED_COMPANIES[0]; // plan pro : 900 min incluses
@@ -20,14 +22,40 @@ function callsTotalling(minutes: number): Call[] {
   return [call("2026-06-05T10:00:00-04:00", minutes * 60)];
 }
 
-describe("computeMonthMinutes", () => {
+function spamIntel(): CallIntelligence {
+  return {
+    engine: "rules-v1", summary: "spam", intent: "spam", intentConfidence: 0.9,
+    sentiment: "neutre", urgency: "basse", leadQuality: "non_qualifie", estimatedValueCad: 0,
+    valueBasis: "aucun", nextAction: "aucune", tags: [], commercialScore: 0,
+    confidence: 0.9, finalStatus: "ignore_spam", collectedFields: {},
+  };
+}
+
+describe("computeMonthUsage (la facture est vraie)", () => {
   it("ne compte que le mois civil courant, sans arrondi par appel", () => {
     const calls = [
       call("2026-06-01T08:00:00-04:00", 90), // 1,5 min
       call("2026-06-10T08:00:00-04:00", 30), // 0,5 min
       call("2026-05-31T08:00:00-04:00", 36_000), // mois précédent — ignoré
     ];
-    expect(computeMonthMinutes(calls, NOW)).toBe(2);
+    expect(computeMonthUsage(calls, NOW).billableMinutes).toBe(2);
+  });
+
+  it("le spam détecté n'est JAMAIS facturé — il est compté à part, visible", () => {
+    const calls = [
+      call("2026-06-01T08:00:00-04:00", 120),
+      { ...call("2026-06-02T08:00:00-04:00", 60), intelligence: spamIntel() },
+    ];
+    const usage = computeMonthUsage(calls, NOW);
+    expect(usage.billableMinutes).toBe(2);
+    expect(usage.spamMinutes).toBe(1);
+    expect(usage.spamCalls).toBe(1);
+    // La facture estimée repose sur les minutes facturables seulement.
+    expect(estimateMonthInvoice("starter", usage).minutesUsed).toBe(2);
+  });
+
+  it("un appel sans analyse reste facturable — le spam doit être détecté pour être offert", () => {
+    expect(isBillableCall(call("2026-06-01T08:00:00-04:00", 60))).toBe(true);
   });
 });
 

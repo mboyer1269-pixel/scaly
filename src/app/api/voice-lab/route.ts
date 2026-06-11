@@ -6,7 +6,7 @@
  */
 import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
-import { DEFAULT_COMPANY_ID } from "@/data/companies";
+import { resolveCompanyId } from "@/server/tenant";
 import { getScriptById } from "@/data/industry-scripts";
 import { getVoiceScenarioById } from "@/data/voice-scenarios";
 import { advanceVoiceSession, createVoiceSession, type VoiceRuntimeContext } from "@/services/voice-runtime";
@@ -25,9 +25,10 @@ interface VoiceLabBody {
 
 async function buildContext(scriptId: string): Promise<VoiceRuntimeContext | NextResponse> {
   const store = getStore();
-  const company = await store.getCompany(DEFAULT_COMPANY_ID);
-  const agent = await store.getAgentByCompany(DEFAULT_COMPANY_ID);
-  if (!company || !agent) return NextResponse.json({ error: "Compagnie de démonstration introuvable" }, { status: 500 });
+  const companyId = resolveCompanyId();
+  const company = await store.getCompany(companyId);
+  const agent = await store.getAgentByCompany(companyId);
+  if (!company || !agent) return NextResponse.json({ error: "Compagnie introuvable" }, { status: 500 });
   const script = getScriptById(scriptId);
   if (!script) return NextResponse.json({ error: `Script introuvable : ${scriptId}` }, { status: 400 });
   return { company, agent, script };

@@ -59,12 +59,20 @@ describe("interpretStripeEvent", () => {
     return { id: "evt_test", type, data: { object } };
   }
 
-  it("checkout.session.completed → plan + ids client/abonnement, statut actif", () => {
+  it("checkout.session.completed → plan + ids client/abonnement, statut actif, tenant des métadonnées", () => {
     const u = interpretStripeEvent(
       evt("checkout.session.completed", { customer: "cus_1", subscription: "sub_1", metadata: { planId: "pro", companyId: "comp_belair" } }),
     );
     expect(u?.planId).toBe("pro");
+    expect(u?.companyId).toBe("comp_belair");
     expect(u?.billing).toMatchObject({ stripeCustomerId: "cus_1", stripeSubscriptionId: "sub_1", subscriptionStatus: "active" });
+  });
+
+  it("résout le tenant via client_reference_id quand metadata est vide, undefined sinon", () => {
+    const u = interpretStripeEvent(evt("checkout.session.completed", { customer: "cus_1", client_reference_id: "comp_rivnord", metadata: {} }));
+    expect(u?.companyId).toBe("comp_rivnord");
+    const v = interpretStripeEvent(evt("customer.subscription.updated", { status: "active", metadata: {} }));
+    expect(v?.companyId).toBeUndefined(); // le webhook retombe alors sur le tenant démo
   });
 
   it("ignore un planId inconnu plutôt que de corrompre le plan", () => {
