@@ -1,0 +1,27 @@
+# CI — le contrat du ROADMAP (« typecheck + vitest + build avant merge »).
+# Sans secret ni base : STORE_PROVIDER=memory, DATABASE_URL factice (jamais
+# contactée — toutes les pages sont force-dynamic, les tests n'utilisent
+# jamais getStore(), règle ADR-011).
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    env:
+      STORE_PROVIDER: memory
+      DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
