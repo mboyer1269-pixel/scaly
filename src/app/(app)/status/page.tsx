@@ -9,6 +9,8 @@ import { getStore } from "@/server/store";
 import { getVoiceStackHealth } from "@/adapters/voice/health";
 import { isAuthEnabled } from "@/server/auth";
 import { llmIntelligenceEngine } from "@/services/llm-intelligence";
+import { runAllVoiceScenarios } from "@/services/voice-lab";
+import { LATENCY_TARGET_P50_MS, LATENCY_TARGET_P95_MS } from "@/domain/voice";
 import { Badge, Card, HonestyNote, PageHeader } from "@/components/ui";
 import { formatDateTime } from "@/lib/format";
 
@@ -18,12 +20,16 @@ export default async function StatusPage({ searchParams }: { searchParams: { liv
   const store = getStore();
   const info = store.info();
   const live = searchParams.live === "1" ? await store.verifyLive() : null;
-  const [companies, calls, actions, audit] = await Promise.all([
+  const [companies, calls, actions, audit, voiceSessions] = await Promise.all([
     store.listCompanies(),
     store.listCalls(),
     store.listActions(),
     store.getAuditLog(10),
+    store.listVoiceSessions(),
   ]);
+  // Preuve vivante du Voice Lab : les 6 scénarios golden rejoués à CHAQUE rendu
+  // (déterministes et purs — exactement ce que la CI verrouille).
+  const voiceReport = runAllVoiceScenarios();
 
   const verdict = live
     ? live.ok && live.provider === "prisma"
@@ -159,6 +165,47 @@ export default async function StatusPage({ searchParams }: { searchParams: { liv
             </li>
           ))}
         </ul>
+      </Card>
+
+      <Card
+        title="Voice Lab (P2A)"
+        subtitle="les 6 scénarios golden rejoués en direct à chaque affichage de cette page — même vert que la CI"
+        className="mt-6"
+        action={
+          <Badge tone={voiceReport.allPass ? "emerald" : "rose"}>
+            {voiceReport.checks.filter((c) => c.pass).length}/{voiceReport.checks.length} scénarios verts
+          </Badge>
+        }
+      >
+        <ul className="grid gap-2 sm:grid-cols-2">
+          {voiceReport.checks.map((c) => (
+            <li key={c.scenarioId} className="flex items-center justify-between gap-3 rounded-lg border border-ink-100 px-3 py-2">
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-ink-900">{c.title}</p>
+                <p className="truncate text-xs text-ink-500">
+                  {c.pass
+                    ? `${c.session.telemetry.fieldsConfirmed} champ(s) confirmé(s) · p95 ${c.session.telemetry.perceivedP95Ms} ms`
+                    : c.failures.join(" ; ")}
+                </p>
+              </div>
+              <Badge tone={c.pass ? "emerald" : "rose"}>{c.pass ? "Vert" : "Échec"}</Badge>
+            </li>
+          ))}
+        </ul>
+        <dl className="mt-4 space-y-2 border-t border-ink-100 pt-3 text-sm">
+          <div className="flex items-center justify-between">
+            <dt className="text-ink-500">Budget latence (simulée, déclarée telle)</dt>
+            <dd>
+              <Badge tone={voiceReport.latencyBudgetMet ? "emerald" : "rose"}>
+                p50 {voiceReport.aggregateP50Ms} ms / p95 {voiceReport.aggregateP95Ms} ms · cibles &lt; {LATENCY_TARGET_P50_MS} / {LATENCY_TARGET_P95_MS} ms
+              </Badge>
+            </dd>
+          </div>
+          <div className="flex items-center justify-between">
+            <dt className="text-ink-500">Sessions sauvegardées</dt>
+            <dd className="font-medium text-ink-900">{voiceSessions.length} dans le store ({info.provider})</dd>
+          </div>
+        </dl>
       </Card>
 
       <Card title="Derniers événements d'audit" subtitle="journal de conformité (Loi 25)" className="mt-6">
