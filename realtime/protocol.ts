@@ -50,7 +50,7 @@ export function twilioClearFrame(streamSid: string): string {
  * transcription d'entrée activée (transcript final = preuve + intelligence).
  * NB : le header `OpenAI-Beta: realtime=v1` est REJETÉ par l'API GA.
  */
-export function openAiSessionUpdate(systemPrompt: string, voice: string, model = "gpt-realtime"): object {
+export function openAiSessionUpdate(systemPrompt: string, voice: string, model = "gpt-realtime", lang = "fr"): object {
   return {
     type: "session.update",
     session: {
@@ -63,7 +63,10 @@ export function openAiSessionUpdate(systemPrompt: string, voice: string, model =
           // 350 ms de silence (défaut 500) : turn-taking plus vif — la lenteur
           // perçue au premier appel venait des pauses, pas du modèle (367 ms mesurées).
           turn_detection: { type: "server_vad", silence_duration_ms: 350 },
-          transcription: { model: "whisper-1" },
+          // Indice de langue : sans lui, Whisper transcrivait le FR-QC en
+          // anglais/allemand (vu à l'appel réel n° 3) — le verbatim des
+          // consentements et les transcripts en dépendent.
+          transcription: { model: "whisper-1", language: lang },
         },
         output: {
           format: { type: "audio/pcmu" },
