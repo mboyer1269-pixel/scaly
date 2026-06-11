@@ -14,6 +14,7 @@ import {
   Plug,
   Settings,
   Shield,
+  Sparkles,
   Zap,
 } from "lucide-react";
 
@@ -26,6 +27,7 @@ const NAV = [
   { href: "/actions", label: "Actions", icon: Zap },
   { href: "/integrations", label: "Intégrations", icon: Plug },
   { href: "/agent", label: "Agent vocal", icon: Bot },
+  { href: "/onboarding", label: "Onboarding magique", icon: Sparkles },
   { href: "/settings", label: "Entreprise", icon: Settings },
   { href: "/admin", label: "Admin (fondateur)", icon: Shield },
   { href: "/status", label: "Statut système", icon: Activity },
