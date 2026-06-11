@@ -1,9 +1,13 @@
-/** Dashboard PME — la réponse aux questions business en un écran. */
+/**
+ * Dashboard PME — la réponse du propriétaire en 60 secondes :
+ * combien d'argent est en jeu, quels appels sauver MAINTENANT, quoi faire ensuite.
+ */
 import Link from "next/link";
-import { AlertTriangle, ArrowRight, Flame, Lightbulb, MessageSquareWarning, TrendingUp } from "lucide-react";
+import { AlertTriangle, ArrowRight, Download, Flame, Lightbulb, MessageSquareWarning, PhoneMissed, TrendingUp } from "lucide-react";
 import { getStore } from "@/server/store";
 import { DEFAULT_COMPANY_ID } from "@/data/companies";
 import { computeDashboard, computePhonePerformanceScore } from "@/services/analytics";
+import { computeRescueQueue, computeRoiSnapshot } from "@/services/rescue";
 import { Badge, Card, EmptyState, PageHeader, Stat } from "@/components/ui";
 import { callStatusBadge, leadBadge, urgencyBadge } from "@/lib/labels";
 import { INTENT_LABELS, NEXT_ACTION_LABELS } from "@/domain/call";
@@ -20,10 +24,20 @@ const KIND_ICONS = {
   recommandation: Lightbulb,
 } as const;
 
+const RESCUE_WINDOW_BADGE = {
+  fenetre_critique: { label: "fenêtre critique", tone: "rose" as const },
+  encore_chaud: { label: "encore chaud", tone: "amber" as const },
+  refroidi: { label: "refroidi", tone: "slate" as const },
+};
+
 export default async function DashboardPage() {
   const store = getStore();
   const company = (await store.getCompany(DEFAULT_COMPANY_ID))!;
-  const d = computeDashboard(company, await store.listCalls(company.id), await store.listActions(company.id));
+  const calls = await store.listCalls(company.id);
+  const actions = await store.listActions(company.id);
+  const d = computeDashboard(company, calls, actions);
+  const roi = computeRoiSnapshot(company, d, calls);
+  const rescue = computeRescueQueue(company, calls, actions).slice(0, 5);
   const perf = computePhonePerformanceScore(d);
   const maxDay = Math.max(1, ...d.byDay.map((b) => b.total));
 
@@ -33,8 +47,79 @@ export default async function DashboardPage() {
         <div className="flex items-center gap-2">
           <Badge tone={perf >= 70 ? "emerald" : perf >= 40 ? "amber" : "rose"}>Performance téléphonique : {perf}/100</Badge>
           <Badge tone="slate">{d.periodDays} derniers jours</Badge>
+          <a
+            href="/api/export/calls"
+            className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-medium text-ink-600 hover:bg-ink-50"
+          >
+            <Download size={12} /> Export CRM (CSV)
+          </a>
         </div>
       </PageHeader>
+
+      {/* === La réponse en 60 secondes : l'argent, puis les appels à sauver === */}
+      <div className="mb-6 grid gap-6 lg:grid-cols-5">
+        <Card title="Ce que Scaly vous rapporte" subtitle={`${roi.periodDays} derniers jours · estimations par barème d'industrie, recalibrées par client`} className="lg:col-span-2">
+          <p className="text-3xl font-black text-emerald-600">{formatCad(roi.protectedCad)}</p>
+          <p className="mt-1 text-sm leading-relaxed text-ink-600">
+            protégés sur <span className="font-semibold text-ink-900">{roi.wouldBeLostCount} appel{roi.wouldBeLostCount > 1 ? "s" : ""}</span> qui
+            auraient été perdus sans Scaly{roi.multiple !== null && roi.multiple > 0 && (
+              <> — <span className="font-bold text-ink-900">{String(roi.multiple).replace(".", ",")}×</span> le prix de votre plan ({formatCad(roi.planPriceCad)}/mois)</>
+            )}.
+          </p>
+          <dl className="mt-3 space-y-1.5 border-t border-ink-100 pt-3 text-xs text-ink-500">
+            <div className="flex justify-between">
+              <dt>Encore à risque (manqués non récupérés)</dt>
+              <dd className={d.missedValueAtRiskCad > 0 ? "font-semibold text-rose-600" : "font-semibold text-emerald-600"}>{formatCad(roi.atRiskCad)}</dd>
+            </div>
+            <div className="flex justify-between">
+              <dt>Appels servis en anglais (bilingue prouvé)</dt>
+              <dd className="font-semibold text-ink-800">{roi.enCallsCount}</dd>
+            </div>
+          </dl>
+        </Card>
+
+        <Card
+          title="Appels à sauver maintenant"
+          subtitle="chaque minute compte : la majorité des clients achètent du premier répondant"
+          className="lg:col-span-3"
+          action={
+            rescue.length > 0 ? (
+              <a href="/api/export/calls?status=rescue" className="text-xs font-medium text-scaly-600 hover:underline">Exporter la file</a>
+            ) : undefined
+          }
+        >
+          {rescue.length === 0 && (
+            <div className="flex items-center gap-2 py-4 text-sm text-emerald-700">
+              <PhoneMissed size={16} /> Aucun appel à sauver — tout est répondu ou récupéré. C'est exactement le travail de Scaly.
+            </div>
+          )}
+          <ul className="space-y-2">
+            {rescue.map((e) => {
+              const w = RESCUE_WINDOW_BADGE[e.window];
+              return (
+                <li key={e.call.id}>
+                  <Link
+                    href={`/calls/${e.call.id}`}
+                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ink-100 px-3 py-2 hover:border-rose-300 hover:bg-rose-50/40"
+                  >
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-ink-900">
+                        {e.call.callerName ?? e.call.fromNumber}
+                        <span className="ml-2 font-normal text-ink-400">il y a {e.minutesSinceCall < 60 ? `${e.minutesSinceCall} min` : `${Math.round(e.minutesSinceCall / 60)} h`}</span>
+                      </p>
+                      <p className="truncate text-xs text-ink-500">{e.suggested}{e.smsPlanned ? " · SMS auto planifié" : ""}</p>
+                    </div>
+                    <span className="flex items-center gap-2">
+                      <Badge tone={w.tone}>{w.label}</Badge>
+                      <span className="text-sm font-bold text-rose-600">{formatCad(e.valueAtRiskCad)}</span>
+                    </span>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      </div>
 
       <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
         <Stat label="Appels reçus" value={String(d.callsTotal)} sub={`${formatDuration(d.avgDurationSec)} en moyenne`} />
