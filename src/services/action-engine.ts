@@ -9,6 +9,8 @@ import type { Call } from "@/domain/call";
 import type { Company } from "@/domain/company";
 import { newId } from "@/lib/format";
 import { getExecutor, getRealExecutorStub } from "@/adapters/integrations/executors";
+import { isSmsConfigured, sendSms } from "@/adapters/integrations/twilio-sms";
+import { isWithinContactHours } from "@/lib/contact-hours";
 
 function mk(call: Call | null, company: Company, type: ActionType, title: string, payload: Record<string, unknown>): ScalyAction {
   const now = new Date().toISOString();
@@ -179,4 +181,44 @@ export function executeAction(action: ScalyAction): ScalyAction {
     action.audit.push({ at: now(), event: "échec", detail: action.lastError });
   }
   return action;
+}
+
+/** Vrai si cette action est un SMS sortant (send_sms ou notify_owner par SMS). */
+function isSmsAction(action: ScalyAction): boolean {
+  return action.type === "send_sms" || (action.type === "notify_owner" && (action.payload.channel ?? "sms") === "sms");
+}
+
+/**
+ * Exécution LIVE (P3) : si l'action est un SMS et que Twilio Messaging est
+ * configuré, le SMS part POUR VRAI (audit « exécutée (RÉELLE) » + SID Twilio).
+ * Garde d'heures CRTC pour les envois planifiés (`respectContactHours` dans le
+ * payload) — jamais pour les notifications d'urgence au propriétaire.
+ * Sinon : retombe sur executeAction (mock honnête / requires_config).
+ */
+export async function executeActionLive(action: ScalyAction): Promise<ScalyAction> {
+  if (action.status === "succeeded" || action.status === "cancelled") return action;
+  const now = () => new Date().toISOString();
+
+  if (isSmsAction(action) && isSmsConfigured()) {
+    if (action.payload.respectContactHours === true && !isWithinContactHours()) {
+      action.audit.push({ at: now(), event: "reportée", detail: "Hors heures de contact permises (CRTC) — sera retentée au prochain passage." });
+      return action; // reste pending : le prochain cron la reprendra dans les heures permises
+    }
+    action.attempts += 1;
+    action.status = "executing";
+    action.audit.push({ at: now(), event: "exécution démarrée", detail: `Tentative ${action.attempts} (Twilio Messaging réel)` });
+    try {
+      const result = await sendSms(String(action.payload.to), String(action.payload.body));
+      action.status = "succeeded";
+      action.executedAt = now();
+      action.audit.push({ at: now(), event: "exécutée (RÉELLE)", detail: `SMS Twilio ${result.sid} → ${result.to} (statut ${result.status})` });
+    } catch (err) {
+      action.status = "failed";
+      action.lastError = err instanceof Error ? err.message : String(err);
+      action.audit.push({ at: now(), event: "échec (Twilio réel)", detail: action.lastError });
+    }
+    return action;
+  }
+
+  return executeAction(action);
 }
