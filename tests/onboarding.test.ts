@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractWebsiteText, validateDraft } from "@/services/onboarding";
+import { extractWebsiteText, isForbiddenHost, validateDraft } from "@/services/onboarding";
 
 describe("extractWebsiteText", () => {
   it("retire scripts, styles, commentaires et balises", () => {
@@ -19,6 +19,24 @@ describe("extractWebsiteText", () => {
 
   it("tronque au plafond demandé", () => {
     expect(extractWebsiteText(`<p>${"mot ".repeat(500)}</p>`, 100)).toHaveLength(100);
+  });
+});
+
+describe("isForbiddenHost (garde SSRF)", () => {
+  it("refuse loopback, privé, link-local, métadonnées cloud et hôtes internes", () => {
+    for (const h of [
+      "localhost", "api.localhost", "intranet.local", "db.internal", "serveur-sans-point",
+      "127.0.0.1", "10.0.0.5", "172.16.0.1", "172.31.255.255", "192.168.1.1",
+      "169.254.169.254", "100.64.0.1", "0.0.0.0", "::1", "fe80::1", "fd00::1",
+    ]) {
+      expect(isForbiddenHost(h), h).toBe(true);
+    }
+  });
+
+  it("accepte les sites publics", () => {
+    for (const h of ["plomberiebelair.ca", "www.example.com", "8.8.8.8", "172.32.0.1", "100.128.0.1"]) {
+      expect(isForbiddenHost(h), h).toBe(false);
+    }
   });
 });
 

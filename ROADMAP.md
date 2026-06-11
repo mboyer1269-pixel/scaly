@@ -37,7 +37,10 @@ Infra : file d'attente pg-boss + workers ; idempotence par action.id ; retries e
 **KPI** : 3-5 PME pilotes payantes ; > 95 % d'actions réussies ; temps de rappel d'appel manqué < 2 min.
 
 ## P4 — Monétisation & durcissement (≈ 2-3 semaines)
-Stripe (abonnements + minutes excédentaires + frais d'installation — logique déjà dans domain/billing), portail client, alertes de dépassement, rate limiting, RLS Postgres, pentest léger, SLA internes, runbooks.
+**Livré** :
+**P4.1 — Pricing public honnête ✅** : `/pricing` — plans de domain/billing publiés (mensuel CAD, minutes incluses, dépassement affiché, frais d'installation), engagements anti-irritants (spam non facturé, transferts humains inclus, arrondi mensuel pas par appel).
+**P4.2 — Stripe ✅ (activation = STRIPE_SECRET_KEY + STRIPE_WEBHOOK_SECRET)** : checkout abonnement à prix inline (aucun produit à créer dans le dashboard Stripe), webhook signé (HMAC vérifié, rejeu refusé) seul autorisé à écrire `company.billing` + `planId`, portail client dans /settings, audit « stripe » sur chaque mouvement. **Minutes excédentaires : PAS de metered billing en pilote — facturation manuelle au tarif publié** (décision assumée, à automatiser quand le volume le justifie).
+**P4.3 — Durcissement ✅** : alertes de dépassement de minutes (80 %/100 %, même tuyau SMS que le pouls, dédup par mois+seuil via l'audit, échec d'envoi retenté) ; rate limiting fenêtre glissante sur les routes coûteuses (onboarding LLM 5/10 min, checkout 10/10 min, simulateur 30/10 min — par instance, documenté) ; pentest léger appliqué (garde SSRF sur le fetch d'onboarding avec redirections validées saut par saut, idempotence du webhook Stripe par id d'événement, middleware corrigé : /pricing et webhooks externes publics — ils s'auto-protègent par signature) ; SLA internes + runbooks (docs/RUNBOOKS.md). RLS Postgres : différé au multi-tenant réel, décision et prérequis dans ADR-016.
 **KPI** : facturation automatique sans intervention ; marge brute par client visible et > 70 % (modèle interne).
 
 ## P5 — Échelle produit

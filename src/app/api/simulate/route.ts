@@ -10,8 +10,12 @@ import { getPersonaById, PERSONAS } from "@/data/personas";
 import { getScriptById, getScriptByIndustry, INDUSTRY_SCRIPTS } from "@/data/industry-scripts";
 import { simulateCall } from "@/services/simulator";
 import type { Industry } from "@/domain/company";
+import { clientKey, createRateLimiter, tooManyRequests } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
+
+// Démo publique : 30 simulations / 10 min / client.
+const limiter = createRateLimiter(30, 10 * 60_000);
 
 interface SimulateBody {
   industry?: Industry;
@@ -22,6 +26,8 @@ interface SimulateBody {
 }
 
 export async function POST(req: Request) {
+  const rl = limiter.check(clientKey(req));
+  if (!rl.allowed) return tooManyRequests(rl.retryAfterSec);
   let body: SimulateBody = {};
   try {
     body = (await req.json()) as SimulateBody;

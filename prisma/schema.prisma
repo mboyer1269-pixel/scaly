@@ -37,6 +37,7 @@ model Company {
   followUp        Json
   compliance      Json
   planId          String
+  billing         Json?    // CompanyBilling — écrit par le webhook Stripe uniquement
   createdAt       DateTime @default(now())
 
   agents  VoiceAgent[]
