@@ -50,12 +50,16 @@ interface SessionLog {
   transferReason?: string;
 }
 
-async function fetchContext(companyId: string): Promise<{ company: Company; agent: VoiceAgentConfig; script: IndustryScript }> {
-  const res = await fetch(`${APP_URL}/api/voice/context?companyId=${encodeURIComponent(companyId)}`, {
+async function fetchContext(
+  companyId: string,
+  from: string,
+): Promise<{ company: Company; agent: VoiceAgentConfig; script: IndustryScript; knownCaller?: { callCount: number; name?: string; address?: string; lastCallAt?: string } }> {
+  const qs = `companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(from)}`;
+  const res = await fetch(`${APP_URL}/api/voice/context?${qs}`, {
     headers: SECRET ? { "x-scaly-secret": SECRET } : {},
   });
   if (!res.ok) throw new Error(`Contexte introuvable (${res.status}) — l'app Next tourne-t-elle sur ${APP_URL} ?`);
-  return (await res.json()) as { company: Company; agent: VoiceAgentConfig; script: IndustryScript };
+  return (await res.json()) as Awaited<ReturnType<typeof fetchContext>>;
 }
 
 async function postComplete(log: SessionLog): Promise<void> {
@@ -125,16 +129,17 @@ function handleTwilioConnection(twilioWs: WebSocket): void {
       }
       void (async () => {
         try {
-          const ctx = await fetchContext(log!.companyId);
-          // Le numéro de l'afficheur entre dans le prompt : on CONFIRME le
-          // numéro au lieu de le faire dicter (échec observé à l'appel n° 2).
+          // Contexte + dossier client réel (historique du numéro) : on CONFIRME
+          // le numéro au lieu de le faire dicter, et « comme la dernière fois »
+          // n'existe QUE si l'historique existe (appels réels n° 2 et 3).
+          const ctx = await fetchContext(log!.companyId, log!.from);
           const prompt = buildRealtimePrompt({ ...ctx, callerNumber: log!.from });
           // API GA : pas de header OpenAI-Beta (rejeté par le GA).
           openaiWs = new WebSocket(`wss://api.openai.com/v1/realtime?model=${encodeURIComponent(MODEL)}`, {
             headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
           });
           openaiWs.on("open", () => {
-            openaiWs!.send(JSON.stringify(openAiSessionUpdate(prompt, VOICE, MODEL)));
+            openaiWs!.send(JSON.stringify(openAiSessionUpdate(prompt, VOICE, MODEL, ctx.company.defaultLanguage)));
             // L'agente parle en premier (accueil) : on déclenche la première réponse.
             openaiWs!.send(JSON.stringify({ type: "response.create" }));
             console.log(`[realtime] Session ouverte pour ${log!.callSid} (${ctx.company.name}, modèle ${MODEL})`);

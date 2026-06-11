@@ -13,12 +13,22 @@ import type { VoiceAgentConfig } from "@/domain/agent";
 import type { IndustryScript } from "@/domain/script";
 import { FIELD_LABELS } from "@/domain/script";
 
+/** Dossier client RÉEL (historique d'appels du même numéro) — jamais inventé. */
+export interface KnownCaller {
+  callCount: number;
+  name?: string;
+  address?: string;
+  lastCallAt?: string;
+}
+
 export interface RealtimePromptContext {
   company: Company;
   agent: VoiceAgentConfig;
   script: IndustryScript;
   /** Numéro de l'afficheur (Twilio `From`) — si connu, on CONFIRME au lieu de faire dicter. */
   callerNumber?: string;
+  /** Historique réel de ce numéro — alimente « comme la dernière fois » HONNÊTEMENT. */
+  knownCaller?: KnownCaller;
 }
 
 /** « +18194211269 » → « 819 421-1269 » (lisible à voix haute). Null si non exploitable. */
@@ -29,7 +39,7 @@ export function speakablePhone(raw?: string): string | null {
   return `${digits.slice(0, 3)} ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
-export function buildRealtimePrompt({ company, agent, script, callerNumber }: RealtimePromptContext): string {
+export function buildRealtimePrompt({ company, agent, script, callerNumber, knownCaller }: RealtimePromptContext): string {
   const lines: string[] = [];
   const fr = company.defaultLanguage === "fr";
   const callerPhone = speakablePhone(callerNumber);
@@ -76,6 +86,36 @@ export function buildRealtimePrompt({ company, agent, script, callerNumber }: Re
       `Ne mélange JAMAIS deux informations (un numéro n'est pas une adresse).`,
   );
 
+  lines.push(
+    `4. ADRESSES ET NOMS DE LIEUX : répète le numéro civique CHIFFRE PAR CHIFFRE (« 5-2-9-1, c'est ça ? »). Si le nom de rue ` +
+      `ou de ville est inhabituel ou que tu n'es pas certaine de l'avoir bien entendu, fais-le ÉPELER. Ne remplace JAMAIS ` +
+      `silencieusement un nom de lieu par un autre qui ressemble — si t'es pas sûre, demande.`,
+  );
+
+  // --- Ce que tu sais et ce que tu ne sais PAS (anti-hallucination) ---
+  lines.push(`# Ce que tu sais — et RIEN d'autre`);
+  lines.push(
+    `Tu n'as AUCUNE information sur l'appelant à part ce qui est écrit dans ce prompt. INTERDIT de dire « comme d'habitude », ` +
+      `« la même adresse que d'habitude », « à votre dossier » ou de laisser croire que tu as un historique${knownCaller ? " AU-DELÀ de la section « Client connu » ci-dessous" : ""}. ` +
+      `Si l'appelant demande ce que tu as au dossier, réponds honnêtement et exactement ce que tu as${callerPhone ? ` (le numéro de l'afficheur${knownCaller ? " et les informations de la section Client connu" : ", rien d'autre"})` : ""}.`,
+  );
+
+  // --- Dossier client réel ---
+  if (knownCaller) {
+    lines.push(`# Client connu (données RÉELLES de notre historique d'appels)`);
+    lines.push(
+      `Ce numéro nous a déjà appelés ${knownCaller.callCount} fois.` +
+        (knownCaller.name ? ` Nom au dossier : ${knownCaller.name}.` : "") +
+        (knownCaller.address ? ` Adresse au dossier : ${knownCaller.address}.` : "") +
+        (knownCaller.lastCallAt ? ` Dernier appel : ${knownCaller.lastCallAt.slice(0, 10)}.` : ""),
+    );
+    lines.push(
+      `Utilise-le naturellement et avec tact : accueille par le nom si tu l'as (« Bonjour${knownCaller.name ? ` ${knownCaller.name}` : ""} ! »), ` +
+        `et CONFIRME l'adresse au lieu de la redemander (« C'est toujours au ${knownCaller.address ?? "…"} ? »). ` +
+        `Si l'appelant corrige une information du dossier, prends SA version — le dossier peut être périmé.`,
+    );
+  }
+
   // --- Numéro de l'afficheur : confirmer, jamais faire dicter ---
   if (callerPhone) {
     lines.push(`# Numéro de rappel (tu le connais DÉJÀ)`);
@@ -104,6 +144,12 @@ export function buildRealtimePrompt({ company, agent, script, callerNumber }: Re
   lines.push(`# Mission — qualifier l'appel`);
   lines.push(`Collecte ces informations, UNE question à la fois, dans l'ordre, sans interrogatoire (conversationnel) :`);
   for (const q of script.questions) {
+    // Le numéro de l'afficheur est connu : on CONFIRME, on ne fait jamais dicter
+    // (le modèle suit la liste — la consigne doit vivre DANS la liste).
+    if (q.fieldKey === "telephone" && callerPhone) {
+      lines.push(`- ${FIELD_LABELS[q.fieldKey]} (requis) — DÉJÀ CONNU par l'afficheur : ${callerPhone}. Confirme-le seulement, ne le fais JAMAIS dicter.`);
+      continue;
+    }
     lines.push(`- ${FIELD_LABELS[q.fieldKey]}${q.required ? " (requis)" : " (optionnel)"} — FR : « ${q.question} »${q.questionEn ? ` / EN : « ${q.questionEn} »` : ""}`);
   }
   lines.push(`Si une réponse contredit une information déjà donnée, clarifie tout de suite — ne devine jamais.`);
@@ -115,7 +161,9 @@ export function buildRealtimePrompt({ company, agent, script, callerNumber }: Re
   }
   lines.push(
     `Urgence critique = fast-track : réaction empathique + consigne de sécurité simple s'il y a lieu, puis confirme SEULEMENT ` +
-      `l'adresse et le numéro de rappel, annonce le transfert à l'équipe de garde, puis transfère. Pas de qualification complète.`,
+      `l'adresse et le numéro de rappel, annonce le transfert à l'équipe de garde, puis transfère. Pas de qualification complète. ` +
+      `NE déclenche le transfert QUE lorsque l'adresse est réellement confirmée ET le numéro réellement confirmé — un numéro ` +
+      `mal entendu ou une adresse incertaine = on reste en ligne et on clarifie d'abord.`,
   );
   lines.push(
     `Fais confiance à ton jugement au-delà des mots-clés : « j'ai de l'eau partout », « ça sent drôle », « le plafond coule » ` +

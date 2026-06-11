@@ -59,13 +59,34 @@ describe("buildRealtimePrompt", () => {
     expect(prompt).toContain("sourire dans la voix");
   });
 
-  it("avec le numéro de l'afficheur : CONFIRMER le numéro, jamais le faire dicter", () => {
+  it("avec le numéro de l'afficheur : CONFIRMER le numéro, jamais le faire dicter — y compris DANS la liste de questions", () => {
     const withCaller = buildRealtimePrompt({ company, agent, script, callerNumber: "+18194211269" });
     expect(withCaller).toContain("819 421-1269");
     expect(withCaller).toContain("NE lui demande JAMAIS de dicter son numéro");
-    // Sans afficheur exploitable : pas de section, on fait dicter normalement.
+    // La question « dictez votre numéro » est REMPLACÉE dans la liste (le modèle suit la liste).
+    expect(withCaller).not.toContain("Quel est le meilleur numéro pour vous rejoindre");
+    expect(withCaller).toContain("DÉJÀ CONNU par l'afficheur");
+    // Sans afficheur exploitable : dictée classique, pas de mention d'afficheur.
     expect(buildRealtimePrompt({ company, agent, script, callerNumber: "anonymous" })).not.toContain("afficheur");
-    expect(prompt).not.toContain("afficheur");
+    expect(prompt).toContain("Quel est le meilleur numéro pour vous rejoindre");
+  });
+
+  it("anti-hallucination : aucun dossier prétendu ; « comme d'habitude » interdit sans Client connu", () => {
+    expect(prompt).toContain("Tu n'as AUCUNE information sur l'appelant");
+    expect(prompt).toContain("comme d'habitude");
+    expect(prompt).not.toContain("Client connu");
+  });
+
+  it("client connu : SEULES les vraies données du dossier entrent, utilisées avec tact", () => {
+    const known = buildRealtimePrompt({
+      company, agent, script, callerNumber: "+18194211269",
+      knownCaller: { callCount: 2, name: "Richard Ballonnet", address: "5291 chemin du Lac-Héduc, Montpellier", lastCallAt: "2026-06-11T14:00:00.000Z" },
+    });
+    expect(known).toContain("Client connu (données RÉELLES");
+    expect(known).toContain("Richard Ballonnet");
+    expect(known).toContain("5291 chemin du Lac-Héduc");
+    expect(known).toContain("C'est toujours au");
+    expect(known).toContain("prends SA version");
   });
 
   it("inclut les critères d'urgence et le fast-track critique", () => {
