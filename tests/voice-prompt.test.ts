@@ -4,7 +4,7 @@
  * rappel ADR-015) doit être présente et vérifiable.
  */
 import { describe, expect, it } from "vitest";
-import { buildRealtimePrompt } from "@/services/voice-prompt";
+import { buildRealtimePrompt, speakablePhone } from "@/services/voice-prompt";
 import { SEED_AGENTS, SEED_COMPANIES } from "@/data/companies";
 import { getScriptById } from "@/data/industry-scripts";
 
@@ -12,6 +12,16 @@ const company = SEED_COMPANIES[0];
 const agent = SEED_AGENTS.find((a) => a.companyId === company.id)!;
 const script = getScriptById(agent.qualificationScriptId)!;
 const prompt = buildRealtimePrompt({ company, agent, script });
+
+describe("speakablePhone", () => {
+  it("formate un numéro nord-américain pour la voix, refuse le reste", () => {
+    expect(speakablePhone("+18194211269")).toBe("819 421-1269");
+    expect(speakablePhone("819-421-1269")).toBe("819 421-1269");
+    expect(speakablePhone("anonymous")).toBeNull();
+    expect(speakablePhone("inconnu")).toBeNull();
+    expect(speakablePhone(undefined)).toBeNull();
+  });
+});
 
 describe("buildRealtimePrompt", () => {
   it("est déterministe", () => {
@@ -41,6 +51,21 @@ describe("buildRealtimePrompt", () => {
       expect(prompt).toContain(q.question);
     }
     expect(prompt).toContain("(requis)");
+  });
+
+  it("personnalité : empathie avant procédure, répondre aux questions, présence vocale QC", () => {
+    expect(prompt).toContain("L'ÉMOTION AVANT LA PROCÉDURE");
+    expect(prompt).toContain("RÉPONDS AUX QUESTIONS");
+    expect(prompt).toContain("sourire dans la voix");
+  });
+
+  it("avec le numéro de l'afficheur : CONFIRMER le numéro, jamais le faire dicter", () => {
+    const withCaller = buildRealtimePrompt({ company, agent, script, callerNumber: "+18194211269" });
+    expect(withCaller).toContain("819 421-1269");
+    expect(withCaller).toContain("NE lui demande JAMAIS de dicter son numéro");
+    // Sans afficheur exploitable : pas de section, on fait dicter normalement.
+    expect(buildRealtimePrompt({ company, agent, script, callerNumber: "anonymous" })).not.toContain("afficheur");
+    expect(prompt).not.toContain("afficheur");
   });
 
   it("inclut les critères d'urgence et le fast-track critique", () => {
