@@ -53,15 +53,24 @@ export interface ScalyRepository {
   listCalls(companyId?: string): Promise<Call[]>;
   getCall(id: string): Promise<Call | undefined>;
   addCall(call: Call, actions: ScalyAction[]): Promise<void>;
+  /** Persiste un appel modifié (ex. ré-analyse LLM, purge de transcript). */
+  saveCall(call: Call): Promise<Call>;
   listActions(companyId?: string, callId?: string): Promise<ScalyAction[]>;
   getAction(id: string): Promise<ScalyAction | undefined>;
   /** Persiste une action mutée (ex. après executeAction). */
   saveAction(action: ScalyAction): Promise<ScalyAction>;
   getAuditLog(limit?: number): Promise<ComplianceAuditEntry[]>;
   recordAudit(entry: Omit<ComplianceAuditEntry, "at">): Promise<void>;
+  /**
+   * Purge Loi 25 : vide les transcripts des appels plus vieux que le
+   * `compliance.retentionDays` de chaque compagnie (l'intelligence agrégée est
+   * conservée, le verbatim est supprimé). Retourne le nombre d'appels purgés.
+   */
+  purgeExpiredTranscripts(now?: Date): Promise<{ purged: number }>;
 }
 
-class InMemoryStore implements ScalyRepository {
+/** Exporté pour les tests : instanciation directe, sans passer par l'env (jamais de vraie base en test). */
+export class InMemoryStore implements ScalyRepository {
   private companies = new Map<string, Company>();
   private agents = new Map<string, VoiceAgentConfig>(); // clé : companyId
   private calls = new Map<string, Call>();
@@ -145,6 +154,11 @@ class InMemoryStore implements ScalyRepository {
     await this.recordAudit({ companyId: call.companyId, actor: "simulateur", event: "appel_ajouté", detail: call.id });
   }
 
+  async saveCall(call: Call): Promise<Call> {
+    this.calls.set(call.id, call);
+    return call;
+  }
+
   async listActions(companyId?: string, callId?: string): Promise<ScalyAction[]> {
     return [...this.actions.values()]
       .filter((a) => (!companyId || a.companyId === companyId) && (!callId || a.callId === callId))
@@ -166,6 +180,23 @@ class InMemoryStore implements ScalyRepository {
 
   async recordAudit(entry: Omit<ComplianceAuditEntry, "at">): Promise<void> {
     this.audit.push({ ...entry, at: new Date().toISOString() });
+  }
+
+  async purgeExpiredTranscripts(now = new Date()): Promise<{ purged: number }> {
+    let purged = 0;
+    for (const company of this.companies.values()) {
+      const cutoff = new Date(now.getTime() - company.compliance.retentionDays * 86_400_000);
+      for (const call of this.calls.values()) {
+        if (call.companyId === company.id && call.transcript.length > 0 && new Date(call.startedAt) < cutoff) {
+          this.calls.set(call.id, { ...call, transcript: [] });
+          purged += 1;
+        }
+      }
+      if (purged > 0) {
+        await this.recordAudit({ companyId: company.id, actor: "system", event: "transcripts_purgés", detail: `rétention ${company.compliance.retentionDays} j` });
+      }
+    }
+    return { purged };
   }
 }
 

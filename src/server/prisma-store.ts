@@ -294,6 +294,12 @@ export class PrismaStore implements ScalyRepository {
     await this.recordAudit({ companyId: call.companyId, actor: "simulateur", event: "appel_ajouté", detail: call.id });
   }
 
+  async saveCall(call: Call): Promise<Call> {
+    const data = callToDb(call);
+    await prisma.call.upsert({ where: { id: call.id }, create: data, update: data });
+    return call;
+  }
+
   async listActions(companyId?: string, callId?: string): Promise<ScalyAction[]> {
     const rows = await prisma.action.findMany({
       where: {
@@ -336,5 +342,31 @@ export class PrismaStore implements ScalyRepository {
         detail: entry.detail ?? null,
       },
     });
+  }
+
+  async purgeExpiredTranscripts(now = new Date()): Promise<{ purged: number }> {
+    const companies = await this.listCompanies();
+    let purged = 0;
+    for (const company of companies) {
+      const cutoff = new Date(now.getTime() - company.compliance.retentionDays * 86_400_000);
+      const res = await prisma.call.updateMany({
+        where: {
+          companyId: company.id,
+          startedAt: { lt: cutoff },
+          NOT: { transcript: { equals: [] } },
+        },
+        data: { transcript: [] },
+      });
+      if (res.count > 0) {
+        purged += res.count;
+        await this.recordAudit({
+          companyId: company.id,
+          actor: "system",
+          event: "transcripts_purgés",
+          detail: `${res.count} appels · rétention ${company.compliance.retentionDays} j`,
+        });
+      }
+    }
+    return { purged };
   }
 }
