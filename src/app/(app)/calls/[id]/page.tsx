@@ -4,6 +4,8 @@ import { notFound } from "next/navigation";
 import clsx from "clsx";
 import { ArrowLeft } from "lucide-react";
 import { getStore } from "@/server/store";
+import { getSessionRole } from "@/server/auth";
+import { resolveCompanyId } from "@/server/tenant";
 import { Badge, Card, HonestyNote, PageHeader } from "@/components/ui";
 import { actionStatusBadge, callStatusBadge, leadBadge, sentimentLabel, urgencyBadge } from "@/lib/labels";
 import { INTENT_LABELS, NEXT_ACTION_LABELS } from "@/domain/call";
@@ -17,7 +19,8 @@ export const dynamic = "force-dynamic";
 export default async function CallDetailPage({ params }: { params: { id: string } }) {
   const store = getStore();
   const call = await store.getCall(params.id);
-  if (!call) notFound();
+  // Garde d'appartenance (anti-IDOR) : un appel d'un autre tenant = introuvable, sauf fondateur.
+  if (!call || (call.companyId !== resolveCompanyId() && getSessionRole() !== "founder")) notFound();
   const actions = await store.listActions(undefined, call.id);
   const intel = call.intelligence;
   const u = urgencyBadge(intel?.urgency);

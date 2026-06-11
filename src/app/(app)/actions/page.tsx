@@ -1,7 +1,7 @@
 /** File d'actions — tout ce que Scaly a déclenché, avec audit trail complet. */
 import Link from "next/link";
 import { getStore } from "@/server/store";
-import { DEFAULT_COMPANY_ID } from "@/data/companies";
+import { resolveCompanyId } from "@/server/tenant";
 import { Badge, Card, EmptyState, HonestyNote, PageHeader } from "@/components/ui";
 import { actionStatusBadge } from "@/lib/labels";
 import { ACTION_TYPE_LABELS, type ActionStatus } from "@/domain/action";
@@ -20,7 +20,7 @@ const FILTERS: { value: string; label: string }[] = [
 
 export default async function ActionsPage({ searchParams }: { searchParams: { status?: string } }) {
   const store = getStore();
-  const allActions = await store.listActions(DEFAULT_COMPANY_ID);
+  const allActions = await store.listActions(resolveCompanyId());
   const filter = searchParams.status ?? "";
   const actions = filter ? allActions.filter((a) => a.status === (filter as ActionStatus)) : allActions;
 

@@ -1,6 +1,5 @@
 /** Configuration entreprise — le contexte métier qui pilote l'agent vocal. */
-import { getStore } from "@/server/store";
-import { DEFAULT_COMPANY_ID } from "@/data/companies";
+import { resolveCompany } from "@/server/tenant";
 import { PageHeader } from "@/components/ui";
 import { SettingsForm } from "@/components/SettingsForm";
 import { BillingCard } from "@/components/BillingCard";
@@ -8,7 +7,7 @@ import { BillingCard } from "@/components/BillingCard";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const company = (await getStore().getCompany(DEFAULT_COMPANY_ID))!;
+  const company = (await resolveCompany())!;
   return (
     <>
       <PageHeader title="Configuration de l'entreprise" subtitle="Ces informations alimentent directement les scripts, l'escalade et la conformité de l'agent" />

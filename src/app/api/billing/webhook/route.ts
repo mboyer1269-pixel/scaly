@@ -3,6 +3,8 @@
  * Vérifie Stripe-Signature (HMAC, STRIPE_WEBHOOK_SECRET) sur le corps BRUT,
  * traduit l'événement en patch de Company (plan + état d'abonnement) et trace
  * chaque changement dans l'audit. Seule cette route écrit `company.billing`.
+ * Tenant : metadata.companyId posé au checkout (PAS de session ici) ;
+ * repli tenant démo si un événement ancien n'en porte pas.
  */
 import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
@@ -32,7 +34,8 @@ export async function POST(req: Request) {
   if (!update) return NextResponse.json({ received: true, ignored: event.type });
 
   const store = getStore();
-  const company = await store.getCompany(DEFAULT_COMPANY_ID);
+  const companyId = update.companyId ?? DEFAULT_COMPANY_ID;
+  const company = await store.getCompany(companyId);
   if (!company) return NextResponse.json({ error: "Entreprise introuvable" }, { status: 404 });
 
   // Idempotence : un rejeu du même événement (dans la fenêtre de tolérance de
@@ -42,12 +45,12 @@ export async function POST(req: Request) {
     return NextResponse.json({ received: true, duplicate: event.id });
   }
 
-  await store.updateCompany(DEFAULT_COMPANY_ID, {
+  await store.updateCompany(companyId, {
     ...(update.planId ? { planId: update.planId } : {}),
     billing: mergeBilling(company.billing, update),
   });
   await store.recordAudit({
-    companyId: DEFAULT_COMPANY_ID,
+    companyId,
     actor: "stripe",
     event: "abonnement_mis_à_jour",
     detail: update.auditDetail,

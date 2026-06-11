@@ -5,7 +5,7 @@
 import Link from "next/link";
 import { AlertTriangle, ArrowRight, Download, Flame, Lightbulb, MessageSquareWarning, PhoneMissed, TrendingUp } from "lucide-react";
 import { getStore } from "@/server/store";
-import { DEFAULT_COMPANY_ID } from "@/data/companies";
+import { resolveCompany } from "@/server/tenant";
 import { computeDashboard, computePhonePerformanceScore } from "@/services/analytics";
 import { computeRescueQueue, computeRoiSnapshot } from "@/services/rescue";
 import { Badge, Card, EmptyState, PageHeader, Stat } from "@/components/ui";
@@ -32,7 +32,7 @@ const RESCUE_WINDOW_BADGE = {
 
 export default async function DashboardPage() {
   const store = getStore();
-  const company = (await store.getCompany(DEFAULT_COMPANY_ID))!;
+  const company = (await resolveCompany())!;
   const calls = await store.listCalls(company.id);
   const actions = await store.listActions(company.id);
   const d = computeDashboard(company, calls, actions);

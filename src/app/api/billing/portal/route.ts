@@ -3,8 +3,7 @@
  * annuler son abonnement). 503 sans Stripe ; 409 si aucun abonnement connu.
  */
 import { NextResponse } from "next/server";
-import { getStore } from "@/server/store";
-import { DEFAULT_COMPANY_ID } from "@/data/companies";
+import { resolveCompany } from "@/server/tenant";
 import { createPortalSession, isStripeConfigured, stripeConfigHint } from "@/adapters/integrations/stripe";
 
 export const dynamic = "force-dynamic";
@@ -13,7 +12,7 @@ export async function POST(req: Request) {
   if (!isStripeConfigured()) {
     return NextResponse.json({ error: stripeConfigHint() }, { status: 503 });
   }
-  const company = await getStore().getCompany(DEFAULT_COMPANY_ID);
+  const company = await resolveCompany();
   const customerId = company?.billing?.stripeCustomerId;
   if (!customerId) {
     return NextResponse.json({ error: "Aucun abonnement Stripe connu pour cette entreprise — passez d'abord par la page Prix." }, { status: 409 });

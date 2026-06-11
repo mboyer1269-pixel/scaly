@@ -1,7 +1,7 @@
 /** Journal des appels — filtrable (statut, urgence, intention, recherche). */
 import Link from "next/link";
 import { getStore } from "@/server/store";
-import { DEFAULT_COMPANY_ID } from "@/data/companies";
+import { resolveCompanyId } from "@/server/tenant";
 import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
 import { callStatusBadge, leadBadge, urgencyBadge } from "@/lib/labels";
 import { INTENT_LABELS } from "@/domain/call";
@@ -18,7 +18,7 @@ interface SearchParams {
 
 export default async function CallsPage({ searchParams }: { searchParams: SearchParams }) {
   const store = getStore();
-  let calls = await store.listCalls(DEFAULT_COMPANY_ID);
+  let calls = await store.listCalls(resolveCompanyId());
 
   const { status, urgency, intent, q } = searchParams;
   if (status) calls = calls.filter((c) => c.status === status);
