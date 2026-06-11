@@ -71,6 +71,14 @@ export interface FollowUpPreferences {
   dailyDigestHour: number; // heure locale d'envoi du résumé quotidien
 }
 
+/** État d'abonnement Stripe — écrit UNIQUEMENT par le webhook Stripe, jamais par l'UI. */
+export interface CompanyBilling {
+  stripeCustomerId?: string;
+  stripeSubscriptionId?: string;
+  subscriptionStatus?: string; // active | past_due | canceled | …
+  currentPeriodEnd?: string; // ISO
+}
+
 export interface Company {
   id: string;
   name: string;
@@ -93,6 +101,7 @@ export interface Company {
   followUp: FollowUpPreferences;
   compliance: CompliancePolicy;
   planId: PlanId;
+  billing?: CompanyBilling;
   createdAt: string;
 }
 

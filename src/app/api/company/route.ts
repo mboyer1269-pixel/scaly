@@ -19,9 +19,10 @@ export async function PUT(req: Request) {
   } catch {
     return NextResponse.json({ error: "Corps JSON invalide" }, { status: 400 });
   }
-  // Champs protégés : id et planId ne se modifient pas par cette route.
+  // Champs protégés : id, planId et billing (réservé au webhook Stripe) ne se modifient pas par cette route.
   delete (patch as Record<string, unknown>).id;
   delete (patch as Record<string, unknown>).planId;
+  delete (patch as Record<string, unknown>).billing;
   const company = await getStore().updateCompany(DEFAULT_COMPANY_ID, patch);
   if (!company) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   return NextResponse.json({ company });

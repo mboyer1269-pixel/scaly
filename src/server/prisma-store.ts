@@ -48,6 +48,7 @@ export function companyToDb(c: Company): Prisma.CompanyCreateInput {
     followUp: asJson(c.followUp),
     compliance: asJson(c.compliance),
     planId: c.planId,
+    billing: c.billing ? asJson(c.billing) : Prisma.DbNull,
     createdAt: new Date(c.createdAt),
   };
 }
@@ -75,6 +76,7 @@ export function companyFromDb(row: CompanyRow): Company {
     followUp: row.followUp as unknown as FollowUpPreferences,
     compliance: row.compliance as unknown as CompliancePolicy,
     planId: row.planId as Company["planId"],
+    billing: row.billing ? (row.billing as unknown as Company["billing"]) : undefined,
     createdAt: row.createdAt.toISOString(),
   };
 }
