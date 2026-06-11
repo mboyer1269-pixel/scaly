@@ -127,11 +127,12 @@ function handleTwilioConnection(twilioWs: WebSocket): void {
         try {
           const ctx = await fetchContext(log!.companyId);
           const prompt = buildRealtimePrompt(ctx);
+          // API GA : pas de header OpenAI-Beta (rejeté par le GA).
           openaiWs = new WebSocket(`wss://api.openai.com/v1/realtime?model=${encodeURIComponent(MODEL)}`, {
-            headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}`, "OpenAI-Beta": "realtime=v1" },
+            headers: { Authorization: `Bearer ${process.env.OPENAI_API_KEY}` },
           });
           openaiWs.on("open", () => {
-            openaiWs!.send(JSON.stringify(openAiSessionUpdate(prompt, VOICE)));
+            openaiWs!.send(JSON.stringify(openAiSessionUpdate(prompt, VOICE, MODEL)));
             // L'agente parle en premier (accueil) : on déclenche la première réponse.
             openaiWs!.send(JSON.stringify({ type: "response.create" }));
             console.log(`[realtime] Session ouverte pour ${log!.callSid} (${ctx.company.name}, modèle ${MODEL})`);

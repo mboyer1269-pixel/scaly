@@ -32,18 +32,23 @@ function windowFor(minutes: number): RescueWindow {
 
 const WINDOW_RANK: Record<RescueWindow, number> = { fenetre_critique: 0, encore_chaud: 1, refroidi: 2 };
 
+/** Au-delà de cette fenêtre, un manqué n'est plus « à sauver » — il est perdu (et compté comme tel ailleurs). */
+export const RESCUE_MAX_AGE_DAYS = 7;
+
 /**
- * File de sauvetage : appels manqués/abandonnés/boîte vocale NON récupérés,
- * triés par fenêtre (critique d'abord) puis valeur à risque décroissante.
+ * File de sauvetage : appels manqués/abandonnés/boîte vocale NON récupérés
+ * des 7 derniers jours, triés par fenêtre (critique d'abord) puis valeur
+ * à risque décroissante.
  */
 export function computeRescueQueue(company: Company, calls: Call[], actions: ScalyAction[], now = new Date()): RescueEntry[] {
   const baseline = getScriptByIndustry(company.industry).valueBaselineCad;
+  const oldest = now.getTime() - RESCUE_MAX_AGE_DAYS * 24 * 3600 * 1000;
   const smsByCall = new Set(
     actions.filter((a) => a.type === "send_sms" && a.callId && a.status !== "failed").map((a) => a.callId as string),
   );
 
   return calls
-    .filter((c) => RESCUABLE_STATUSES.has(c.status) && !c.intelligence?.saved)
+    .filter((c) => RESCUABLE_STATUSES.has(c.status) && !c.intelligence?.saved && new Date(c.startedAt).getTime() >= oldest)
     .map((call): RescueEntry => {
       const minutesSinceCall = Math.max(0, Math.round((now.getTime() - new Date(call.startedAt).getTime()) / 60_000));
       const window = windowFor(minutesSinceCall);

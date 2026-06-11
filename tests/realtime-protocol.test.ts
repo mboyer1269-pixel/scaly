@@ -24,23 +24,37 @@ describe("messages Twilio", () => {
   });
 });
 
-describe("session OpenAI Realtime", () => {
-  const session = openAiSessionUpdate("PROMPT_TEST", "marin") as { type: string; session: Record<string, unknown> };
+describe("session OpenAI Realtime (forme GA — vérifiée contre l'exemple officiel Twilio)", () => {
+  const session = openAiSessionUpdate("PROMPT_TEST", "marin") as {
+    type: string;
+    session: {
+      type: string;
+      output_modalities: string[];
+      audio: {
+        input: { format: { type: string }; turn_detection: { type: string }; transcription: { model: string } };
+        output: { format: { type: string }; voice: string };
+      };
+      instructions: string;
+      tools: { name: string }[];
+    };
+  };
 
-  it("audio µ-law 8 kHz dans les deux sens — zéro transcodage dans le pont", () => {
-    expect(session.session.input_audio_format).toBe("g711_ulaw");
-    expect(session.session.output_audio_format).toBe("g711_ulaw");
+  it("session.type realtime + audio/pcmu imbriqué dans les deux sens — zéro transcodage", () => {
+    expect(session.session.type).toBe("realtime");
+    expect(session.session.output_modalities).toEqual(["audio"]);
+    expect(session.session.audio.input.format.type).toBe("audio/pcmu");
+    expect(session.session.audio.output.format.type).toBe("audio/pcmu");
+    expect(session.session.audio.output.voice).toBe("marin");
   });
 
   it("VAD serveur (barge-in), transcription d'entrée et prompt système", () => {
-    expect((session.session.turn_detection as { type: string }).type).toBe("server_vad");
+    expect(session.session.audio.input.turn_detection.type).toBe("server_vad");
     expect(session.session.instructions).toBe("PROMPT_TEST");
-    expect(session.session.input_audio_transcription).toBeTruthy();
+    expect(session.session.audio.input.transcription.model).toBe("whisper-1");
   });
 
   it("expose l'outil transfer_to_human", () => {
-    const tools = session.session.tools as { name: string }[];
-    expect(tools.map((t) => t.name)).toContain("transfer_to_human");
+    expect(session.session.tools.map((t) => t.name)).toContain("transfer_to_human");
   });
 
   it("append audio", () => {
@@ -49,7 +63,9 @@ describe("session OpenAI Realtime", () => {
 });
 
 describe("mapping des événements OpenAI", () => {
-  it("audio delta, VAD, transcripts, fin de réponse", () => {
+  it("audio delta, VAD, transcripts, fin de réponse (noms GA + alias beta)", () => {
+    expect(mapOpenAiEvent(JSON.stringify({ type: "response.output_audio.delta", delta: "QUJD" }))).toEqual({ type: "agent_audio", b64: "QUJD" });
+    expect(mapOpenAiEvent(JSON.stringify({ type: "response.output_audio_transcript.done", transcript: "Allo" }))).toEqual({ type: "agent_transcript", text: "Allo" });
     expect(mapOpenAiEvent(JSON.stringify({ type: "response.audio.delta", delta: "QUJD" }))).toEqual({ type: "agent_audio", b64: "QUJD" });
     expect(mapOpenAiEvent(JSON.stringify({ type: "input_audio_buffer.speech_started" }))).toEqual({ type: "caller_speech_started" });
     expect(mapOpenAiEvent(JSON.stringify({ type: "input_audio_buffer.speech_stopped" }))).toEqual({ type: "caller_speech_stopped" });

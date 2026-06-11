@@ -43,21 +43,32 @@ export function twilioClearFrame(streamSid: string): string {
 // ---------------------------------------------------------------------------
 
 /**
- * Configuration de session : audio µ-law 8 kHz dans LES DEUX sens (le format
- * natif de Twilio — AUCUN transcodage dans le pont), VAD serveur (barge-in),
+ * Configuration de session — API GA (gpt-realtime, vérifiée contre l'exemple
+ * officiel twilio-samples/speech-assistant-openai-realtime-api-node) :
+ * `session.type: "realtime"`, formats audio IMBRIQUÉS (`audio/pcmu` = µ-law
+ * 8 kHz natif Twilio, AUCUN transcodage dans le pont), VAD serveur (barge-in),
  * transcription d'entrée activée (transcript final = preuve + intelligence).
+ * NB : le header `OpenAI-Beta: realtime=v1` est REJETÉ par l'API GA.
  */
-export function openAiSessionUpdate(systemPrompt: string, voice: string): object {
+export function openAiSessionUpdate(systemPrompt: string, voice: string, model = "gpt-realtime"): object {
   return {
     type: "session.update",
     session: {
-      modalities: ["audio", "text"],
+      type: "realtime",
+      model,
+      output_modalities: ["audio"],
+      audio: {
+        input: {
+          format: { type: "audio/pcmu" },
+          turn_detection: { type: "server_vad" },
+          transcription: { model: "whisper-1" },
+        },
+        output: {
+          format: { type: "audio/pcmu" },
+          voice,
+        },
+      },
       instructions: systemPrompt,
-      voice,
-      input_audio_format: "g711_ulaw",
-      output_audio_format: "g711_ulaw",
-      input_audio_transcription: { model: "whisper-1" },
-      turn_detection: { type: "server_vad", silence_duration_ms: 400 },
       tools: [
         {
           type: "function",
@@ -103,6 +114,8 @@ export function mapOpenAiEvent(raw: string): BridgeAction {
   }
   const t = evt.type as string;
   switch (t) {
+    // Noms GA d'abord, alias beta conservés par robustesse (migration GA 2025).
+    case "response.output_audio.delta":
     case "response.audio.delta":
       return { type: "agent_audio", b64: String(evt.delta ?? "") };
     case "input_audio_buffer.speech_started":
@@ -111,6 +124,7 @@ export function mapOpenAiEvent(raw: string): BridgeAction {
       return { type: "caller_speech_stopped" };
     case "conversation.item.input_audio_transcription.completed":
       return { type: "caller_transcript", text: String(evt.transcript ?? "").trim() };
+    case "response.output_audio_transcript.done":
     case "response.audio_transcript.done":
       return { type: "agent_transcript", text: String(evt.transcript ?? "").trim() };
     case "response.function_call_arguments.done": {

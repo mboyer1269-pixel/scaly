@@ -13,7 +13,9 @@ import { callStatusBadge, leadBadge, urgencyBadge } from "@/lib/labels";
 export const dynamic = "force-dynamic";
 
 function csvField(v: string | number | undefined | null): string {
-  const s = String(v ?? "");
+  let s = String(v ?? "");
+  // Anti-injection de formules Excel/Sheets : neutralise =, +, -, @ en tête de cellule.
+  if (/^[=+\-@]/.test(s)) s = `'${s}`;
   return /[",;\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

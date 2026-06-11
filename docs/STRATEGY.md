@@ -39,10 +39,11 @@ Conséquences concrètes de cette décision :
 **« On sauve les appels que tu perds — et on te montre le montant. »**
 
 Pourquoi nous et pas un autre :
-1. **Le moment de vérité** : 28-42 % des appels de PME sont manqués aux
-   heures ouvrables, ~100 % après 17 h. Le concurrent vend « on répond » ;
-   Scaly vend « voici les 3 240 $ qu'on t'a sauvés ce mois-ci » — affiché,
-   pas raconté.
+1. **Le moment de vérité** : 28-42 % des appels de PME manqués aux heures
+   ouvrables, ~100 % après 17 h (stat de fournisseurs du secteur — à VALIDER
+   sur nos propres pilotes avant de l'utiliser en vente). Le concurrent vend
+   « on répond » ; Scaly vend « voici les 3 240 $ qu'on t'a sauvés ce
+   mois-ci » — affiché, pas raconté.
 2. **FR-QC réel** : les leaders US sont EN(+ES). Le joueur QC est horizontal
    et sans preuve. Le code-switching en plein appel est verrouillé en CI chez
    nous — c'est une barrière technique ET culturelle.

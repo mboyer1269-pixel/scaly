@@ -13,6 +13,10 @@ export const dynamic = "force-dynamic";
 
 export async function GET(req: Request) {
   const secret = process.env.REALTIME_SHARED_SECRET;
+  // En production, le secret est OBLIGATOIRE — jamais d'endpoint pont ouvert.
+  if (!secret && process.env.NODE_ENV === "production") {
+    return NextResponse.json({ error: "REALTIME_SHARED_SECRET requis en production" }, { status: 503 });
+  }
   if (secret && req.headers.get("x-scaly-secret") !== secret) {
     return NextResponse.json({ error: "Secret partagé invalide" }, { status: 401 });
   }
