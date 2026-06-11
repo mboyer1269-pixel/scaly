@@ -88,18 +88,54 @@ const DRAFT_SCHEMA = {
   required: ["name", "industry", "city", "services", "serviceAreas", "languages", "tone", "persona", "understanding"],
 } as const;
 
+/**
+ * Garde SSRF (pur, testé) : refuse loopback, réseaux privés, link-local et
+ * hôtes internes — ce fetch part du serveur, il ne doit jamais atteindre le
+ * réseau interne ni les métadonnées cloud. (Limite connue : ne résout pas le
+ * DNS — un domaine public pointant vers une IP privée passerait ; proportionné
+ * au pilote, à durcir avec une résolution préalable si besoin.)
+ */
+export function isForbiddenHost(hostname: string): boolean {
+  const h = hostname.toLowerCase().replace(/^\[|\]$/g, ""); // IPv6 entre crochets
+  if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal") || !h.includes(".")) return true;
+  if (h === "::1" || h === "0.0.0.0" || h.startsWith("fe80:") || h.startsWith("fc") || h.startsWith("fd")) return true;
+  const ipv4 = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+  if (!ipv4) return false;
+  const [a, b] = [Number(ipv4[1]), Number(ipv4[2])];
+  return (
+    a === 0 || a === 10 || a === 127 ||
+    (a === 100 && b >= 64 && b <= 127) || // CGNAT
+    (a === 169 && b === 254) || // link-local / métadonnées cloud
+    (a === 172 && b >= 16 && b <= 31) ||
+    (a === 192 && b === 168)
+  );
+}
+
 /** Récupère la page (10 s, 500 ko max) et la réduit en texte. */
 export async function fetchWebsiteText(url: string): Promise<string> {
   const parsed = new URL(url.startsWith("http") ? url : `https://${url}`);
   if (!["http:", "https:"].includes(parsed.protocol)) throw new Error("URL invalide.");
+  if (isForbiddenHost(parsed.hostname)) throw new Error("Cette adresse n'est pas un site web public.");
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), 10_000);
   try {
-    const res = await fetch(parsed.toString(), {
-      signal: controller.signal,
-      headers: { "User-Agent": "ScalyOnboarding/1.0 (+https://scaly.ca)" },
-      redirect: "follow",
-    });
+    // Redirections suivies à la main : la garde SSRF s'applique à CHAQUE saut.
+    let target = parsed;
+    let res: Response;
+    for (let hop = 0; ; hop++) {
+      res = await fetch(target.toString(), {
+        signal: controller.signal,
+        headers: { "User-Agent": "ScalyOnboarding/1.0 (+https://scaly.ca)" },
+        redirect: "manual",
+      });
+      if (res.status < 300 || res.status >= 400) break;
+      const location = res.headers.get("location");
+      if (!location || hop >= 3) throw new Error("Trop de redirections — vérifiez l'URL.");
+      target = new URL(location, target);
+      if (!["http:", "https:"].includes(target.protocol) || isForbiddenHost(target.hostname)) {
+        throw new Error("Cette adresse n'est pas un site web public.");
+      }
+    }
     if (!res.ok) throw new Error(`Le site répond ${res.status} — vérifiez l'URL.`);
     const html = (await res.text()).slice(0, 500_000);
     const text = extractWebsiteText(html);

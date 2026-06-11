@@ -35,6 +35,13 @@ export async function POST(req: Request) {
   const company = await store.getCompany(DEFAULT_COMPANY_ID);
   if (!company) return NextResponse.json({ error: "Entreprise introuvable" }, { status: 404 });
 
+  // Idempotence : un rejeu du même événement (dans la fenêtre de tolérance de
+  // la signature) ne doit pas être réappliqué. L'audit porte l'id d'événement.
+  const audit = await store.getAuditLog(300);
+  if (audit.some((e) => e.event === "abonnement_mis_à_jour" && e.detail?.includes(`(${event.id})`))) {
+    return NextResponse.json({ received: true, duplicate: event.id });
+  }
+
   await store.updateCompany(DEFAULT_COMPANY_ID, {
     ...(update.planId ? { planId: update.planId } : {}),
     billing: mergeBilling(company.billing, update),
