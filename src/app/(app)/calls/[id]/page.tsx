@@ -13,11 +13,11 @@ import { formatCad, formatDateTime, formatDuration } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-export default function CallDetailPage({ params }: { params: { id: string } }) {
+export default async function CallDetailPage({ params }: { params: { id: string } }) {
   const store = getStore();
-  const call = store.getCall(params.id);
+  const call = await store.getCall(params.id);
   if (!call) notFound();
-  const actions = store.listActions(undefined, call.id);
+  const actions = await store.listActions(undefined, call.id);
   const intel = call.intelligence;
   const u = urgencyBadge(intel?.urgency);
   const l = leadBadge(intel?.leadQuality);

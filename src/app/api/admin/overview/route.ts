@@ -7,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   const store = getStore();
-  const rows = store.listCompanies().map((company) => ({ company, calls: store.listCalls(company.id) }));
-  return NextResponse.json({ overview: computeAdminOverview(rows), audit: store.getAuditLog(20) });
+  const companies = await store.listCompanies();
+  const rows = await Promise.all(companies.map(async (company) => ({ company, calls: await store.listCalls(company.id) })));
+  return NextResponse.json({ overview: computeAdminOverview(rows), audit: await store.getAuditLog(20) });
 }

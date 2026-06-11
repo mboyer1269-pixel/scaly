@@ -1,16 +1,19 @@
 /**
- * Persistance — Repository + implémentation in-memory seedée.
+ * Persistance — Repository async + deux implémentations interchangeables :
+ *  - InMemoryStore (démo)  : données seedées en mémoire, régénérées à chaque
+ *    redémarrage (déterministes grâce aux seeds).
+ *  - PrismaStore (réel)    : Postgres via Prisma (src/server/prisma-store.ts),
+ *    activé par STORE_PROVIDER=prisma. Schéma : prisma/schema.prisma.
  *
- * HONNÊTETÉ : il n'y a PAS de base de données. Les données vivent en mémoire
- * du processus Next.js et sont régénérées à chaque redémarrage (déterministes
- * grâce aux seeds). Le schéma Postgres est PRÉPARÉ dans prisma/schema.prisma ;
- * la migration vers Prisma remplace cette classe sans toucher au reste (P1).
+ * L'interface est asynchrone pour que les deux implémentations soient
+ * strictement substituables (Prisma est intrinsèquement async).
  */
 import type { Call } from "@/domain/call";
 import type { ScalyAction } from "@/domain/action";
 import type { Company } from "@/domain/company";
 import type { VoiceAgentConfig } from "@/domain/agent";
 import { buildSeedData } from "./seed";
+import { PrismaStore } from "./prisma-store";
 
 /** Journal d'audit de conformité (qui a changé quoi, quand). */
 export interface ComplianceAuditEntry {
@@ -21,19 +24,41 @@ export interface ComplianceAuditEntry {
   detail?: string;
 }
 
+export type StoreProvider = "memory" | "prisma";
+
+export interface StoreInfo {
+  provider: StoreProvider;
+  persistent: boolean;
+  description: string;
+}
+
+/** Résultat d'une vérification vivante (aller-retour réel vers la persistance). */
+export interface LiveCheck {
+  ok: boolean;
+  provider: StoreProvider;
+  latencyMs: number;
+  detail: string;
+  verifiedAt: string;
+}
+
 export interface ScalyRepository {
-  listCompanies(): Company[];
-  getCompany(id: string): Company | undefined;
-  updateCompany(id: string, patch: Partial<Company>): Company | undefined;
-  getAgentByCompany(companyId: string): VoiceAgentConfig | undefined;
-  updateAgent(companyId: string, patch: Partial<VoiceAgentConfig>): VoiceAgentConfig | undefined;
-  listCalls(companyId?: string): Call[];
-  getCall(id: string): Call | undefined;
-  addCall(call: Call, actions: ScalyAction[]): void;
-  listActions(companyId?: string, callId?: string): ScalyAction[];
-  getAction(id: string): ScalyAction | undefined;
-  getAuditLog(limit?: number): ComplianceAuditEntry[];
-  recordAudit(entry: Omit<ComplianceAuditEntry, "at">): void;
+  info(): StoreInfo;
+  /** Preuve d'aller-retour réel (lecture + écriture). Jamais « vert » par complaisance. */
+  verifyLive(): Promise<LiveCheck>;
+  listCompanies(): Promise<Company[]>;
+  getCompany(id: string): Promise<Company | undefined>;
+  updateCompany(id: string, patch: Partial<Company>): Promise<Company | undefined>;
+  getAgentByCompany(companyId: string): Promise<VoiceAgentConfig | undefined>;
+  updateAgent(companyId: string, patch: Partial<VoiceAgentConfig>): Promise<VoiceAgentConfig | undefined>;
+  listCalls(companyId?: string): Promise<Call[]>;
+  getCall(id: string): Promise<Call | undefined>;
+  addCall(call: Call, actions: ScalyAction[]): Promise<void>;
+  listActions(companyId?: string, callId?: string): Promise<ScalyAction[]>;
+  getAction(id: string): Promise<ScalyAction | undefined>;
+  /** Persiste une action mutée (ex. après executeAction). */
+  saveAction(action: ScalyAction): Promise<ScalyAction>;
+  getAuditLog(limit?: number): Promise<ComplianceAuditEntry[]>;
+  recordAudit(entry: Omit<ComplianceAuditEntry, "at">): Promise<void>;
 }
 
 class InMemoryStore implements ScalyRepository {
@@ -49,79 +74,110 @@ class InMemoryStore implements ScalyRepository {
     for (const a of seed.agents) this.agents.set(a.companyId, a);
     for (const c of seed.calls) this.calls.set(c.id, c);
     for (const a of seed.actions) this.actions.set(a.id, a);
-    this.recordAudit({ actor: "system", event: "seed_chargé", detail: `${seed.calls.length} appels, ${seed.actions.length} actions (données de démonstration)` });
+    this.audit.push({
+      at: new Date().toISOString(),
+      actor: "system",
+      event: "seed_chargé",
+      detail: `${seed.calls.length} appels, ${seed.actions.length} actions (données de démonstration)`,
+    });
   }
 
-  listCompanies(): Company[] {
+  info(): StoreInfo {
+    return {
+      provider: "memory",
+      persistent: false,
+      description: "In-memory — données de démonstration régénérées à chaque redémarrage",
+    };
+  }
+
+  async verifyLive(): Promise<LiveCheck> {
+    return {
+      ok: true,
+      provider: "memory",
+      latencyMs: 0,
+      detail: `Aucune base de données — ${this.calls.size} appels en mémoire de processus`,
+      verifiedAt: new Date().toISOString(),
+    };
+  }
+
+  async listCompanies(): Promise<Company[]> {
     return [...this.companies.values()];
   }
 
-  getCompany(id: string): Company | undefined {
+  async getCompany(id: string): Promise<Company | undefined> {
     return this.companies.get(id);
   }
 
-  updateCompany(id: string, patch: Partial<Company>): Company | undefined {
+  async updateCompany(id: string, patch: Partial<Company>): Promise<Company | undefined> {
     const existing = this.companies.get(id);
     if (!existing) return undefined;
     const updated = { ...existing, ...patch, id: existing.id };
     this.companies.set(id, updated);
-    this.recordAudit({ companyId: id, actor: "ui", event: "config_entreprise_modifiée", detail: Object.keys(patch).join(", ") });
+    await this.recordAudit({ companyId: id, actor: "ui", event: "config_entreprise_modifiée", detail: Object.keys(patch).join(", ") });
     return updated;
   }
 
-  getAgentByCompany(companyId: string): VoiceAgentConfig | undefined {
+  async getAgentByCompany(companyId: string): Promise<VoiceAgentConfig | undefined> {
     return this.agents.get(companyId);
   }
 
-  updateAgent(companyId: string, patch: Partial<VoiceAgentConfig>): VoiceAgentConfig | undefined {
+  async updateAgent(companyId: string, patch: Partial<VoiceAgentConfig>): Promise<VoiceAgentConfig | undefined> {
     const existing = this.agents.get(companyId);
     if (!existing) return undefined;
     const updated = { ...existing, ...patch, id: existing.id, companyId: existing.companyId };
     this.agents.set(companyId, updated);
-    this.recordAudit({ companyId, actor: "ui", event: "agent_vocal_modifié", detail: Object.keys(patch).join(", ") });
+    await this.recordAudit({ companyId, actor: "ui", event: "agent_vocal_modifié", detail: Object.keys(patch).join(", ") });
     return updated;
   }
 
-  listCalls(companyId?: string): Call[] {
+  async listCalls(companyId?: string): Promise<Call[]> {
     const all = [...this.calls.values()].filter((c) => !companyId || c.companyId === companyId);
     return all.sort((a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime());
   }
 
-  getCall(id: string): Call | undefined {
+  async getCall(id: string): Promise<Call | undefined> {
     return this.calls.get(id);
   }
 
-  addCall(call: Call, actions: ScalyAction[]): void {
+  async addCall(call: Call, actions: ScalyAction[]): Promise<void> {
     this.calls.set(call.id, call);
     for (const a of actions) this.actions.set(a.id, a);
-    this.recordAudit({ companyId: call.companyId, actor: "simulateur", event: "appel_ajouté", detail: call.id });
+    await this.recordAudit({ companyId: call.companyId, actor: "simulateur", event: "appel_ajouté", detail: call.id });
   }
 
-  listActions(companyId?: string, callId?: string): ScalyAction[] {
+  async listActions(companyId?: string, callId?: string): Promise<ScalyAction[]> {
     return [...this.actions.values()]
       .filter((a) => (!companyId || a.companyId === companyId) && (!callId || a.callId === callId))
       .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }
 
-  getAction(id: string): ScalyAction | undefined {
+  async getAction(id: string): Promise<ScalyAction | undefined> {
     return this.actions.get(id);
   }
 
-  getAuditLog(limit = 50): ComplianceAuditEntry[] {
+  async saveAction(action: ScalyAction): Promise<ScalyAction> {
+    this.actions.set(action.id, action);
+    return action;
+  }
+
+  async getAuditLog(limit = 50): Promise<ComplianceAuditEntry[]> {
     return this.audit.slice(-limit).reverse();
   }
 
-  recordAudit(entry: Omit<ComplianceAuditEntry, "at">): void {
+  async recordAudit(entry: Omit<ComplianceAuditEntry, "at">): Promise<void> {
     this.audit.push({ ...entry, at: new Date().toISOString() });
   }
 }
 
 /**
  * Singleton (survit au hot-reload Next.js via globalThis).
- * En P1, `getStore()` retournera une implémentation Prisma — même interface.
+ * STORE_PROVIDER=prisma → Postgres réel ; sinon démo in-memory.
  */
 export function getStore(): ScalyRepository {
+  const wanted: StoreProvider = process.env.STORE_PROVIDER === "prisma" ? "prisma" : "memory";
   const g = globalThis as { __scalyStore?: ScalyRepository };
-  if (!g.__scalyStore) g.__scalyStore = new InMemoryStore();
+  if (!g.__scalyStore || g.__scalyStore.info().provider !== wanted) {
+    g.__scalyStore = wanted === "prisma" ? new PrismaStore() : new InMemoryStore();
+  }
   return g.__scalyStore;
 }

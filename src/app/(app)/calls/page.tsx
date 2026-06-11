@@ -16,9 +16,9 @@ interface SearchParams {
   q?: string;
 }
 
-export default function CallsPage({ searchParams }: { searchParams: SearchParams }) {
+export default async function CallsPage({ searchParams }: { searchParams: SearchParams }) {
   const store = getStore();
-  let calls = store.listCalls(DEFAULT_COMPANY_ID);
+  let calls = await store.listCalls(DEFAULT_COMPANY_ID);
 
   const { status, urgency, intent, q } = searchParams;
   if (status) calls = calls.filter((c) => c.status === status);

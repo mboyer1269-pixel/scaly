@@ -8,11 +8,12 @@ import { formatCad, formatDateTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-export default function AdminPage() {
+export default async function AdminPage() {
   const store = getStore();
-  const rows = store.listCompanies().map((company) => ({ company, calls: store.listCalls(company.id) }));
+  const companies = await store.listCompanies();
+  const rows = await Promise.all(companies.map(async (company) => ({ company, calls: await store.listCalls(company.id) })));
   const o = computeAdminOverview(rows);
-  const audit = store.getAuditLog(15);
+  const audit = await store.getAuditLog(15);
 
   return (
     <>

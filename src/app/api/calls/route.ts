@@ -13,7 +13,7 @@ export async function GET(req: Request) {
   const intent = url.searchParams.get("intent");
   const q = url.searchParams.get("q")?.toLowerCase();
 
-  let calls = getStore().listCalls(companyId);
+  let calls = await getStore().listCalls(companyId);
   if (status) calls = calls.filter((c) => c.status === status);
   if (urgency) calls = calls.filter((c) => c.intelligence?.urgency === urgency);
   if (intent) calls = calls.filter((c) => c.intelligence?.intent === intent);

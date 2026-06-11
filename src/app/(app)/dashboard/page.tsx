@@ -20,10 +20,10 @@ const KIND_ICONS = {
   recommandation: Lightbulb,
 } as const;
 
-export default function DashboardPage() {
+export default async function DashboardPage() {
   const store = getStore();
-  const company = store.getCompany(DEFAULT_COMPANY_ID)!;
-  const d = computeDashboard(company, store.listCalls(company.id), store.listActions(company.id));
+  const company = (await store.getCompany(DEFAULT_COMPANY_ID))!;
+  const d = computeDashboard(company, await store.listCalls(company.id), await store.listActions(company.id));
   const perf = computePhonePerformanceScore(d);
   const maxDay = Math.max(1, ...d.byDay.map((b) => b.total));
 

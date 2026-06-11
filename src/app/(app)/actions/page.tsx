@@ -18,13 +18,13 @@ const FILTERS: { value: string; label: string }[] = [
   { value: "requires_config", label: "Config. requise" },
 ];
 
-export default function ActionsPage({ searchParams }: { searchParams: { status?: string } }) {
+export default async function ActionsPage({ searchParams }: { searchParams: { status?: string } }) {
   const store = getStore();
-  let actions = store.listActions(DEFAULT_COMPANY_ID);
+  const allActions = await store.listActions(DEFAULT_COMPANY_ID);
   const filter = searchParams.status ?? "";
-  if (filter) actions = actions.filter((a) => a.status === (filter as ActionStatus));
+  const actions = filter ? allActions.filter((a) => a.status === (filter as ActionStatus)) : allActions;
 
-  const pendingCount = store.listActions(DEFAULT_COMPANY_ID).filter((a) => a.status === "pending").length;
+  const pendingCount = allActions.filter((a) => a.status === "pending").length;
 
   return (
     <>

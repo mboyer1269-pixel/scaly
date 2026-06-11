@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import clsx from "clsx";
 import {
+  Activity,
   Bot,
   FileText,
   LayoutDashboard,
@@ -25,9 +26,10 @@ const NAV = [
   { href: "/agent", label: "Agent vocal", icon: Bot },
   { href: "/settings", label: "Entreprise", icon: Settings },
   { href: "/admin", label: "Admin (fondateur)", icon: Shield },
+  { href: "/status", label: "Statut système", icon: Activity },
 ];
 
-export function Sidebar() {
+export function Sidebar({ storeProvider = "memory" }: { storeProvider?: "memory" | "prisma" }) {
   const pathname = usePathname();
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-ink-800 bg-ink-950 text-ink-100">
@@ -35,9 +37,15 @@ export function Sidebar() {
         <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-scaly-500 text-sm font-black text-white">S</span>
         <span className="text-lg font-bold tracking-tight text-white">Scaly</span>
       </Link>
-      <p className="mx-4 mb-3 rounded-md bg-amber-500/15 px-2 py-1 text-center text-[11px] font-medium text-amber-300">
-        DÉMO — données simulées
-      </p>
+      {storeProvider === "prisma" ? (
+        <p className="mx-4 mb-3 rounded-md bg-emerald-500/15 px-2 py-1 text-center text-[11px] font-medium text-emerald-300">
+          POSTGRES — données persistées
+        </p>
+      ) : (
+        <p className="mx-4 mb-3 rounded-md bg-amber-500/15 px-2 py-1 text-center text-[11px] font-medium text-amber-300">
+          DÉMO — données simulées
+        </p>
+      )}
       <nav className="flex-1 space-y-0.5 px-3">
         {NAV.map(({ href, label, icon: Icon }) => {
           const active = pathname === href || pathname.startsWith(href + "/");

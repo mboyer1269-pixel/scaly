@@ -30,8 +30,8 @@ export async function POST(req: Request) {
   }
 
   const store = getStore();
-  const company = store.getCompany(DEFAULT_COMPANY_ID);
-  const agent = store.getAgentByCompany(DEFAULT_COMPANY_ID);
+  const company = await store.getCompany(DEFAULT_COMPANY_ID);
+  const agent = await store.getAgentByCompany(DEFAULT_COMPANY_ID);
   if (!company || !agent) return NextResponse.json({ error: "Compagnie de démonstration introuvable" }, { status: 500 });
 
   const script = body.scriptId
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
   const seed = Number.isFinite(body.seed) ? Math.abs(Math.floor(body.seed as number)) : Math.floor(Math.random() * 1_000_000);
   const result = simulateCall({ company, script, persona, seed, agent });
 
-  if (body.persist !== false) store.addCall(result.call, result.actions);
+  if (body.persist !== false) await store.addCall(result.call, result.actions);
 
   return NextResponse.json({ ...result, seed, persisted: body.persist !== false });
 }
