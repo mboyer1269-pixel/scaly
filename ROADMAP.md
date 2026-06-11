@@ -11,13 +11,13 @@ Livré : domaine complet, 15 scripts, simulateur déterministe, intelligence rul
 **Critère de sortie atteint** : démo de 3 minutes qui répond à « combien d'argent Scaly me sauve ? ».
 
 ## P1 — Cerveau réel + persistance (≈ 2-3 semaines de travail focalisé)
-1. Postgres + Prisma (remplacer InMemoryStore — interface déjà prête) + job de purge `retentionDays`.
-2. Auth (Clerk ou NextAuth) + RBAC owner/staff/founder + rattachement tenant ↔ session. **Bloquant avant tout déploiement public.**
-3. `LlmIntelligenceEngine` (même interface que rules-v1) : résumé/intention/urgence/valeur sur transcript brut. Golden set : les 53 appels seed annotés à la main = jeu d'évaluation. Critère : ≥ 90 % d'accord sur intention et urgence vs annotations.
-4. Simulateur LLM optionnel (conversations non templatées) — garde le mode seedé pour les tests.
-5. Observabilité : Sentry + logs structurés + uptime sur /api/health.
-**KPI de phase** : démo persistante en ligne, accès protégé, analyse LLM ≥ 90 % sur golden set. **Coût estimé** : ~0-50 $/mois (tiers gratuits) + coûts API LLM de dev.
-**Risque principal** : dérive de scope sur l'auth multi-tenant → prendre Clerk et avancer.
+1. ✅ Postgres + Prisma (`STORE_PROVIDER=prisma`, vérifiable via `/status?live=1`) + job de purge `retentionDays` (`db:purge` + `/api/cron/purge`). Vérifié sur Postgres local ; Neon = swap de `DATABASE_URL` (ADR-011).
+2. ✅ Auth Clerk + RBAC owner/staff/founder derrière feature flag (clés présentes → auth active). Rattachement tenant ↔ session : mono-tenant assumé jusqu'aux pilotes (ADR-013).
+3. ✅ `LlmIntelligenceEngine` sur transcript brut + golden set des 53 appels annotés à la main. Mesuré : LLM 94,3 % intention / 94,3 % urgence (≥ 90 % atteint) ; rules-v1 94,3 % / 90,6 % (ADR-012). `npm run eval:golden -- --engine=llm`.
+4. ⏳ Simulateur LLM optionnel (conversations non templatées) — non fait, le mode seedé reste le banc d'essai.
+5. ⏳ Observabilité : uptime sur /api/health ✅ ; Sentry + logs structurés — non faits (compte requis).
+**KPI de phase** : analyse LLM ≥ 90 % sur golden set ✅ ; accès protégé ✅ (dès pose des clés) ; démo persistante en ligne ⏳ (déploiement Vercel + Neon restant).
+**Risque principal** : dérive de scope sur l'auth multi-tenant → Clerk pris, on avance.
 
 ## P2 — La voix réelle (≈ 3-5 semaines, le vrai mur technique)
 Suivre docs/VOICE.md étape par étape (Twilio Media Streams → scaly-realtime → OpenAI Realtime, plan B pipeline). Jalons mesurables : (1) echo audio ; (2) premier dialogue IA ; (3) agent qui suit un script avec transfert humain ; (4) 50 appels tests FR/EN dont urgences ; (5) latence perçue < 800 ms p50, < 1200 ms p95.

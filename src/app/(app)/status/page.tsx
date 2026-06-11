@@ -7,6 +7,8 @@ import Link from "next/link";
 import { CheckCircle2, Database, RefreshCw, XCircle } from "lucide-react";
 import { getStore } from "@/server/store";
 import { getVoiceStackHealth } from "@/adapters/voice/health";
+import { isAuthEnabled } from "@/server/auth";
+import { llmIntelligenceEngine } from "@/services/llm-intelligence";
 import { Badge, Card, HonestyNote, PageHeader } from "@/components/ui";
 import { formatDateTime } from "@/lib/format";
 
@@ -82,6 +84,32 @@ export default async function StatusPage({ searchParams }: { searchParams: { liv
             <div className="flex items-center justify-between border-t border-ink-100 pt-3">
               <dt className="text-ink-500">Contenu</dt>
               <dd className="font-medium text-ink-900">{companies.length} entreprises · {calls.length} appels · {actions.length} actions</dd>
+            </div>
+            <div className="flex items-center justify-between border-t border-ink-100 pt-3">
+              <dt className="text-ink-500">Auth (Clerk)</dt>
+              <dd>
+                <Badge tone={isAuthEnabled() ? "emerald" : "amber"}>
+                  {isAuthEnabled() ? "Active — RBAC founder/owner/staff" : "Désactivée (clés absentes)"}
+                </Badge>
+              </dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt className="text-ink-500">Moteur LLM</dt>
+              <dd>
+                <Badge tone={llmIntelligenceEngine.isConfigured() ? "emerald" : "amber"}>
+                  {llmIntelligenceEngine.isConfigured()
+                    ? `Configuré (${process.env.SCALY_LLM_MODEL ?? "gpt-4o-mini"})`
+                    : "Non configuré — rules-v1 seulement"}
+                </Badge>
+              </dd>
+            </div>
+            <div className="flex items-center justify-between">
+              <dt className="text-ink-500">Purge Loi 25</dt>
+              <dd>
+                <Badge tone={process.env.CRON_SECRET ? "emerald" : "amber"}>
+                  {process.env.CRON_SECRET ? "Cron protégé configuré" : "CRON_SECRET absent (db:purge manuel)"}
+                </Badge>
+              </dd>
             </div>
           </dl>
         </Card>

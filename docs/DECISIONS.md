@@ -50,3 +50,18 @@ Chaque décision structurante est tracée ici. Format : contexte → décision �
 **Contexte.** Règle absolue de vérité : pas de données de marché inventées.
 **Décision.** `valueBaselineCad` par industrie est une hypothèse de travail, étiquetée dans l'UI et recalibrée par client réel.
 **Conséquences.** La « valeur sauvée » est une estimation défendable, jamais présentée comme une mesure.
+
+## ADR-011 — Repository asynchrone + PrismaStore derrière STORE_PROVIDER
+**Contexte.** Le store in-memory (ADR-002) devait céder la place à Postgres sans réécrire l'app ; Prisma est intrinsèquement async.
+**Décision.** `ScalyRepository` passe en Promesses ; deux implémentations substituables (`InMemoryStore`, `PrismaStore`) sélectionnées par `STORE_PROVIDER=memory|prisma`. `executeAction()` mute en place : toute route d'exécution DOIT appeler `store.saveAction(result)`.
+**Conséquences.** + Swap de base = une variable d'env. + `/status?live=1` prouve l'aller-retour réel (écriture + relecture + suppression d'une sentinelle) avant d'afficher « Réel (vérifié) ». − RÈGLE DURE (incident du 2026-06-10 : un test de purge a vidé les transcripts du Postgres de dev, car `@prisma/client` charge `.env` à l'import) : les tests n'utilisent JAMAIS `getStore()` — ils instancient `new InMemoryStore()` directement.
+
+## ADR-012 — Golden set annoté à la main + moteur LLM évalué avant adoption
+**Contexte.** Critère P1 : analyse LLM ≥ 90 % d'accord intention ET urgence vs annotations humaines.
+**Décision.** Les 53 appels seed sont annotés à l'aveugle (sans regarder les sorties rules-v1) dans `src/data/golden-set.ts`, ancrés par identité de génération stable. `LlmIntelligenceEngine` (OpenAI, sortie structurée stricte, temperature 0) analyse le transcript BRUT — aucun hint de génération. Le LLM classifie ; valeur et score commercial sont recalculés par le MÊME barème déterministe que rules-v1. Le `primaryIntent` du script est fourni au prompt (même config produit que rules-v1 consomme).
+**Conséquences.** Mesuré le 2026-06-10 (gpt-4o-mini) : rules-v1 = 94,3 % intention / 90,6 % urgence ; LLM = 94,3 % / 94,3 % — critère atteint. Harnais : `npm run eval:golden [-- --engine=llm]` ; plancher rules-v1 verrouillé en CI. 6 désaccords résiduels documentés — pas d'itération de prompt supplémentaire (anti sur-ajustement).
+
+## ADR-013 — Auth Clerk derrière un feature flag + purge Loi 25
+**Contexte.** ADR-009 rendait l'auth bloquante avant tout déploiement public ; la Loi 25 limite la rétention des verbatims.
+**Décision.** Clerk v5 actif seulement si les DEUX clés sont présentes (sinon app ouverte en dev, affiché honnêtement). RBAC : `publicMetadata.role` = founder|owner|staff via le session token ; `/admin`, `/api/admin` et `/status` réservés à founder. Purge : `purgeExpiredTranscripts()` vide le verbatim après `compliance.retentionDays` en conservant l'intelligence agrégée ; déclencheurs `npm run db:purge` ou `/api/cron/purge` protégé par `CRON_SECRET`.
+**Conséquences.** + Déploiement public débloqué dès que les clés Clerk sont posées. − Le rattachement tenant↔session reste mono-tenant (DEFAULT_COMPANY_ID) : multi-tenant réel avec les premiers pilotes.
