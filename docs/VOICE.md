@@ -7,9 +7,26 @@
   - 6 scénarios golden (`data/voice-scenarios.ts`) verrouillés en CI et rejoués en direct dans `/status` ; UI `/voice-lab` (pas-à-pas, autoplay, mode libre).
   - Boucle de valeur : session → `Call` analysé par le même IntelligenceEngine/ActionEngine (`voice-convert.ts`) ; `VoiceSession` persistée (Prisma) avec purge Loi 25 (turns/events purgés, fields/telemetry conservés).
   - Latences SIMULÉES, marquées `simulated:true` partout — les cibles p50/p95 restent des hypothèses jusqu'à P2B.
-- `adapters/voice/types.ts` : interfaces `TelephonyProvider`, `SpeechToTextProvider`, `TextToSpeechProvider`, `RealtimeDialogueProvider`, événements de session, `NotConfiguredError`.
-- Seul `MockDialogueProvider` est opérationnel (texte). Twilio / OpenAI Realtime / ElevenLabs / Whisper = stubs typés qui échouent explicitement sans configuration.
-- AUCUN appel téléphonique réel n'est possible aujourd'hui (P2B).
+- **P2B 🔧 — code complet, premier appel réel en attente d'un numéro Twilio.**
+  - `src/app/api/voice/incoming` : webhook Twilio signé (HMAC vérifié, falsification → 403), TwiML `<Connect><Stream>` vers le pont, **repli `<Dial>` vers l'humain si le realtime est absent — le téléphone ne casse jamais**.
+  - `realtime/` : pont scaly-realtime (Node long-lived, `npm run realtime`) — Twilio Media Streams ↔ OpenAI Realtime, µ-law 8 kHz passthrough (zéro transcodage), VAD serveur + barge-in (response.cancel + clear), outil `transfer_to_human` → redirection REST Twilio, **latences RÉELLES mesurées par tour** (fin de parole → premier octet audio, `simulated:false`).
+  - Prompt système (`src/services/voice-prompt.ts`) construit des MÊMES objets que le Voice Lab : divulgation IA, bilinguisme, urgences fast-track, interdits, **consentement de rappel (ADR-015)** — chaque garde-fou testé.
+  - Fin d'appel → `/api/voice/complete` → Call `source:"live"` analysé par le même IntelligenceEngine/ActionEngine.
+  - Vérifié le 2026-06-11 : compte Twilio ACTIF (créds valides), pont configuré, webhook signé OK. **Il manque : un numéro Twilio (achat ~1-2 $US/mois) + une URL publique (ngrok).**
+
+## Runbook — premier appel réel
+1. Acheter un numéro : Console Twilio → Phone Numbers → Buy (local QC, voix). Mettre `TWILIO_PHONE_NUMBER` à jour.
+2. Exposer l'app et le pont : `ngrok http 3000` (app) et `ngrok http 8081` (pont) — ou un seul tunnel + reverse proxy.
+3. `.env.local` : `SCALY_REALTIME_WS_URL=wss://<ngrok-pont>/twilio`, `SCALY_PUBLIC_URL=https://<ngrok-app>` (optionnel : sinon en-têtes x-forwarded), `REALTIME_SHARED_SECRET=<secret>` (les deux côtés).
+4. Lancer : `npm run dev` (app) + `npm run realtime` (pont). Vérifier `http://localhost:8081/health` → `configured: true`.
+5. Console Twilio → le numéro → Voice Configuration → Webhook `https://<ngrok-app>/api/voice/incoming` (POST).
+6. Appeler le numéro. Attendus : accueil de Sophie < 1 s, transcript dans `/calls` (source `live`), latences réelles dans l'audit, « je veux parler à un humain » → transfert vers `transferPhone`.
+7. Test de panne : arrêter le pont, rappeler → l'appel doit aboutir DIRECTEMENT à l'humain (repli `<Dial>`).
+8. Ensuite : les 50 appels tests FR/EN du jalon 4 (urgences simulées incluses) avant tout client réel.
+
+### Pile préparée (stubs honnêtes, plan B)
+- `adapters/voice/types.ts` : interfaces `TelephonyProvider`, `SpeechToTextProvider`, `TextToSpeechProvider`, `RealtimeDialogueProvider`, `NotConfiguredError`.
+- ElevenLabs / Whisper = stubs typés (plan B pipeline STT→LLM→TTS si la latence FR-QC d'OpenAI Realtime déçoit).
 
 ## Topologie cible
 1. Numéro Twilio par client (ou SIP refer du numéro existant en renvoi d'appel — option zéro-portabilité pour signer vite).

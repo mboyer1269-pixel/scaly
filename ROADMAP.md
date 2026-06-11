@@ -21,13 +21,13 @@ Livré : domaine complet, 15 scripts, simulateur déterministe, intelligence rul
 
 ## P2 — La voix réelle (≈ 3-5 semaines, le vrai mur technique)
 **P2A — Voice Runtime Lab ✅ (ADR-014)** : cerveau conversationnel pur et déterministe — machine à états (12 états), NLU à règles FR-QC/EN, extraction progressive (statut/confiance/evidence, conflits explicites), langue par tour + dominante, barge-in, urgence fast-track, refus spam, transfert humain non négociable, flight recorder, latences simulées (déclarées telles) sous budget. 6 scénarios golden en CI + rejoués dans `/status` ; UI `/voice-lab` ; session → Call via le même IntelligenceEngine/ActionEngine ; `VoiceSession` persistée + purge Loi 25.
-**P2B — Transport réel ⏳** : suivre docs/VOICE.md étape par étape (Twilio Media Streams → scaly-realtime → OpenAI Realtime, plan B pipeline). Jalons mesurables : (1) echo audio ; (2) premier dialogue IA ; (3) agent qui suit un script avec transfert humain ; (4) 50 appels tests FR/EN dont urgences ; (5) latence perçue < 800 ms p50, < 1200 ms p95 — MESURÉE, en remplacement des latences simulées de P2A.
+**P2B — Transport réel 🔧 (code complet, appel réel en attente d'un numéro)** : webhook Twilio signé + repli `<Dial>` (le téléphone ne casse jamais), pont scaly-realtime (Media Streams ↔ OpenAI Realtime, µ-law passthrough, barge-in, transfert humain par outil, latences RÉELLES mesurées par tour), prompt système testé (divulgation IA, consentement de rappel ADR-015), fin d'appel → Call `source:"live"` analysé par le moteur existant. Vérifié : compte Twilio actif, pont configuré. **Restants** : numéro Twilio + ngrok (runbook docs/VOICE.md), puis jalons (4) 50 appels tests FR/EN dont urgences et (5) latence perçue < 800 ms p50 / < 1200 ms p95 — MESURÉE.
 Conformité bloquante : avis juridique Loi 25, DPA fournisseurs, RPRP, politique de confidentialité.
 **KPI** : taux de complétion d'appel test > 90 %, transfert humain fonctionne à 100 %. **Coût estimé** : 50-150 $/mois infra + coûts API par appel.
 **Risques** : latence FR-QC des modèles temps réel (mitigation : plan B pipeline) ; accent québécois en STT (mitigation : jeu de test dédié, choix STT par benchmark).
 
 ## P3 — Les actions réelles (≈ 2-4 semaines, en parallèle des premiers pilotes)
-Ordre d'impact : 1) SMS Twilio (rappel d'appel manqué = ROI le plus visible) ; 2) Google Calendar (RDV) ; 3) courriel résumé quotidien ; 4) webhooks signés ; 5) HubSpot/Pipedrive.
+Ordre d'impact : 1) SMS Twilio + **rappel vocal d'appel manqué < 2 min** (ROI le plus visible — ADR-015, palier 1) ; 2) Google Calendar (RDV) ; 3) **suivi de soumission J+2** (consentement capté pendant l'appel entrant, ADR-015 palier 2) ; 4) courriel résumé quotidien ; 5) webhooks signés ; 6) HubSpot/Pipedrive.
 Infra : file d'attente pg-boss + workers ; idempotence par action.id ; retries exponentiels ; `requires_config` → écran de connexion OAuth par intégration.
 **KPI** : 3-5 PME pilotes payantes ; > 95 % d'actions réussies ; temps de rappel d'appel manqué < 2 min.
 
