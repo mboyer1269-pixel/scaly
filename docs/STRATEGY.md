@@ -66,7 +66,11 @@ Le propriétaire ouvre Scaly et voit, sans cliquer :
 
 V2 (avec les vraies données P2B/P3) : bouton « Rappeler » qui déclenche le
 rappel vocal/SMS depuis la file ; notification propriétaire < 2 min ;
-résumé hebdo courriel « votre téléphone en 5 lignes + le montant ».
+**pouls quotidien par texto** — « Aujourd'hui : 3 chauds (4 100 $), 1 mécontent
+à rappeler, 2 appels sauvés » — parce que le propriétaire vit dans ses textos,
+pas dans un dashboard ; et **répondre au texto, c'est parler à sa
+réceptionniste** (v1 mots-clés CHAUDS/MÉCONTENTS/RÉSUMÉ, v2 conversationnel).
+Le dashboard devient la preuve ; le texto devient l'habitude quotidienne.
 
 ## 5. Features prioritaires (ordre d'exécution)
 
@@ -74,9 +78,14 @@ résumé hebdo courriel « votre téléphone en 5 lignes + le montant ».
    tests FR/EN. Tout le reste est théorique tant que ça n'a pas eu lieu.
 2. **P3.1 — Missed-call rescue actif** : SMS Twilio réel < 2 min + rappel
    vocal (ADR-015 palier 1). C'est le wedge qui devient réel.
-3. **P3.2 — Suivi de soumission J+2** avec consentement capté (palier 2).
-4. **Hebdo ROI courriel** (résumé + montant) — l'anti-churn le moins cher.
-5. **P4 — pricing public honnête** : mensuel fixe, spam non facturé,
+3. **P3.2 — Pouls quotidien par texto** (chauds, mécontents, sauvés, $) +
+   réponse par mots-clés = parler à sa réceptionniste. Même tuyau Twilio que
+   P3.1, coût marginal nul, et c'est l'habitude quotidienne qui tue le churn.
+4. **P3.3 — Suivi de soumission J+2** avec consentement capté (palier 2).
+5. **P3.4 — Onboarding magique** : URL du site + 2 phrases → brouillon de
+   persona/config (LLM), éditable, jamais actif sans approbation. Réduit
+   l'onboarding pilote de jours à minutes — c'est une feature de VENTE.
+6. **P4 — pricing public honnête** : mensuel fixe, spam non facturé,
    transferts inclus — chaque irritant de facturation documenté chez les
    concurrents devient une ligne de notre page prix.
 

@@ -27,7 +27,7 @@ Conformité bloquante : avis juridique Loi 25, DPA fournisseurs, RPRP, politique
 **Risques** : latence FR-QC des modèles temps réel (mitigation : plan B pipeline) ; accent québécois en STT (mitigation : jeu de test dédié, choix STT par benchmark).
 
 ## P3 — Les actions réelles (≈ 2-4 semaines, en parallèle des premiers pilotes)
-Ordre d'impact : 1) SMS Twilio + **rappel vocal d'appel manqué < 2 min** (ROI le plus visible — ADR-015, palier 1) ; 2) Google Calendar (RDV) ; 3) **suivi de soumission J+2** (consentement capté pendant l'appel entrant, ADR-015 palier 2) ; 4) courriel résumé quotidien ; 5) webhooks signés ; 6) HubSpot/Pipedrive.
+Ordre d'impact : 1) SMS Twilio + **rappel vocal d'appel manqué < 2 min** (ROI le plus visible — ADR-015, palier 1) ; 2) **pouls quotidien par TEXTO au propriétaire** (X chauds, Y mécontents, Z sauvés + $ protégés, liens vers les fiches — heure déjà configurable via `followUp.dailyDigestHour` ; même tuyau Twilio que le 1) ; 3) **répondre au texto = parler à sa réceptionniste** — v1 mots-clés déterministes (CHAUDS, MÉCONTENTS, RÉSUMÉ, AIDE), v2 conversationnel LLM sur les données du store ; 4) Google Calendar (RDV) ; 5) **suivi de soumission J+2** (consentement capté pendant l'appel entrant, ADR-015 palier 2) ; 6) **onboarding magique** : la PME colle l'URL de son site + 2 phrases → brouillon de persona/services/heures/zones généré par LLM, ÉDITABLE et jamais actif sans approbation explicite du propriétaire ; 7) webhooks signés ; 8) HubSpot/Pipedrive.
 Infra : file d'attente pg-boss + workers ; idempotence par action.id ; retries exponentiels ; `requires_config` → écran de connexion OAuth par intégration.
 **KPI** : 3-5 PME pilotes payantes ; > 95 % d'actions réussies ; temps de rappel d'appel manqué < 2 min.
 
