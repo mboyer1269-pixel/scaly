@@ -110,6 +110,14 @@ export default function HomePage() {
         </Link>
       </section>
 
+      <section className="border-t border-ink-800 bg-ink-900/50">
+        <div className="mx-auto max-w-6xl px-6 py-8 text-center text-sm text-ink-300">
+          <span className="font-semibold text-white">Conforme par conception.</span>{" "}
+          Loi 25 : consentements captés verbatim, registre consultable, retrait par simple « STOP », purge automatique des transcriptions.{" "}
+          Loi 96 : le français d'abord, l'anglais en option — votre réceptionniste ne vous expose jamais à une plainte linguistique.
+        </div>
+      </section>
+
       <footer className="border-t border-ink-800 px-6 py-8 text-center text-xs text-ink-500">
         Scaly — plateforme en construction. Démo honnête : aucun chiffre de marché inventé, aucune intégration prétendue.
       </footer>

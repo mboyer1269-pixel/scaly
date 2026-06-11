@@ -40,11 +40,31 @@ model Company {
   billing         Json?    // CompanyBilling — écrit par le webhook Stripe uniquement
   createdAt       DateTime @default(now())
 
-  agents  VoiceAgent[]
-  calls   Call[]
-  actions Action[]
-  audits  AuditLog[]
-  usage   UsagePeriod[]
+  agents   VoiceAgent[]
+  calls    Call[]
+  actions  Action[]
+  audits   AuditLog[]
+  usage    UsagePeriod[]
+  consents Consent[]
+}
+
+// Coffre de consentements (ADR-018) — par personne, opposable, révocable.
+model Consent {
+  id           String    @id
+  companyId    String
+  phone        String // numéro canonique (chiffres, sans le 1 initial)
+  kind         String // rappel | reactivation
+  status       String // actif | refuse | revoque
+  verbatim     String // réponse EXACTE de la personne — la preuve
+  channel      String // appel | sms | manuel
+  sourceCallId String?
+  capturedAt   DateTime
+  revokedAt    DateTime?
+  revokedVia   String?
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@index([companyId, phone])
 }
 
 model VoiceAgent {

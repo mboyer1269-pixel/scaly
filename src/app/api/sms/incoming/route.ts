@@ -10,6 +10,7 @@ import { getStore } from "@/server/store";
 import { DEFAULT_COMPANY_ID } from "@/data/companies";
 import { validateTwilioSignature, xmlEscape } from "@/server/twilio";
 import { answerOwnerKeyword, parseOwnerKeyword } from "@/services/digest";
+import { isRevocationMessage } from "@/services/consent";
 
 export const dynamic = "force-dynamic";
 
@@ -47,6 +48,20 @@ export async function POST(req: Request) {
 
   const from = params["From"] ?? "";
   const body = params["Body"] ?? "";
+
+  // RÉVOCATION (ADR-018) — AVANT tout : « STOP / ARRÊT » de N'IMPORTE QUI
+  // révoque ses consentements immédiatement. Loi 25 : le retrait doit être
+  // aussi simple que le consentement.
+  if (isRevocationMessage(body)) {
+    const revoked = await store.revokeConsents(company.id, from, `SMS « ${body.trim().slice(0, 20)} »`);
+    await store.recordAudit({
+      companyId: company.id,
+      actor: "twilio",
+      event: "consentement_révoqué",
+      detail: `${from} · ${revoked} consentement(s) révoqué(s) par texto — plus aucune relance automatique.`,
+    });
+    return smsReply("C'est noté : vous ne recevrez plus de rappels ni de textos de suivi de notre part. / You will no longer receive follow-up calls or texts from us.");
+  }
 
   // Seul le propriétaire parle à sa réceptionniste — jamais de données à un tiers.
   if (canon(from) !== canon(company.transferPhone)) {

@@ -11,6 +11,8 @@
 import type { Call } from "@/domain/call";
 import type { ScalyAction } from "@/domain/action";
 import type { Company } from "@/domain/company";
+import type { ConsentRecord } from "@/domain/consent";
+import { canonicalPhone } from "@/domain/consent";
 import type { VoiceAgentConfig } from "@/domain/agent";
 import type { VoiceSessionRecord } from "@/domain/voice";
 import { buildSeedData } from "./seed";
@@ -62,6 +64,11 @@ export interface ScalyRepository {
   saveAction(action: ScalyAction): Promise<ScalyAction>;
   getAuditLog(limit?: number): Promise<ComplianceAuditEntry[]>;
   recordAudit(entry: Omit<ComplianceAuditEntry, "at">): Promise<void>;
+  /** Coffre de consentements (ADR-018) — par personne, opposable, révocable. */
+  listConsents(companyId?: string, phone?: string): Promise<ConsentRecord[]>;
+  saveConsent(record: ConsentRecord): Promise<ConsentRecord>;
+  /** Révoque TOUS les consentements de ce numéro. Retourne le nombre révoqué. */
+  revokeConsents(companyId: string, phone: string, via: string, now?: Date): Promise<number>;
   /** Persiste une session du Voice Lab (upsert — turns/events purgeables Loi 25). */
   saveVoiceSession(record: VoiceSessionRecord): Promise<VoiceSessionRecord>;
   listVoiceSessions(companyId?: string): Promise<VoiceSessionRecord[]>;
@@ -81,6 +88,7 @@ export class InMemoryStore implements ScalyRepository {
   private calls = new Map<string, Call>();
   private actions = new Map<string, ScalyAction>();
   private voiceSessions = new Map<string, VoiceSessionRecord>();
+  private consents = new Map<string, ConsentRecord>();
   private audit: ComplianceAuditEntry[] = [];
 
   constructor() {
@@ -186,6 +194,30 @@ export class InMemoryStore implements ScalyRepository {
 
   async recordAudit(entry: Omit<ComplianceAuditEntry, "at">): Promise<void> {
     this.audit.push({ ...entry, at: new Date().toISOString() });
+  }
+
+  async listConsents(companyId?: string, phone?: string): Promise<ConsentRecord[]> {
+    const canon = phone ? canonicalPhone(phone) : undefined;
+    return [...this.consents.values()]
+      .filter((c) => (!companyId || c.companyId === companyId) && (!canon || c.phone === canon))
+      .sort((a, b) => b.capturedAt.localeCompare(a.capturedAt));
+  }
+
+  async saveConsent(record: ConsentRecord): Promise<ConsentRecord> {
+    this.consents.set(record.id, record);
+    return record;
+  }
+
+  async revokeConsents(companyId: string, phone: string, via: string, now = new Date()): Promise<number> {
+    const canon = canonicalPhone(phone);
+    let revoked = 0;
+    for (const c of this.consents.values()) {
+      if (c.companyId === companyId && c.phone === canon && c.status !== "revoque") {
+        this.consents.set(c.id, { ...c, status: "revoque", revokedAt: now.toISOString(), revokedVia: via });
+        revoked += 1;
+      }
+    }
+    return revoked;
   }
 
   async saveVoiceSession(record: VoiceSessionRecord): Promise<VoiceSessionRecord> {

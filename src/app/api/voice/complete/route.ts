@@ -9,6 +9,7 @@ import { getStore } from "@/server/store";
 import { getScriptById } from "@/data/industry-scripts";
 import { intelligenceEngine } from "@/services/intelligence";
 import { planActionsForCall } from "@/services/action-engine";
+import { consentFromCall } from "@/services/consent";
 import { newId } from "@/lib/format";
 import type { Call, TranscriptTurn } from "@/domain/call";
 import type { LanguageCode } from "@/domain/company";
@@ -86,6 +87,19 @@ export async function POST(req: Request) {
 
   const actions = planActionsForCall(call, company);
   await store.addCall(call, actions);
+
+  // Coffre de consentements (ADR-018) : la réponse captée en appel devient
+  // un enregistrement opposable par PERSONNE (oui ET non).
+  const consent = consentFromCall(call);
+  if (consent) {
+    await store.saveConsent(consent);
+    await store.recordAudit({
+      companyId: company.id,
+      actor: "scaly-realtime",
+      event: "consentement_capté",
+      detail: `${consent.phone} · ${consent.status} · « ${consent.verbatim.slice(0, 60)} » (appel ${call.id})`,
+    });
+  }
   await store.recordAudit({
     companyId: company.id,
     actor: "scaly-realtime",

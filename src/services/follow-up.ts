@@ -9,6 +9,7 @@
 import type { Call } from "@/domain/call";
 import type { Company } from "@/domain/company";
 import type { ScalyAction } from "@/domain/action";
+import { canonicalPhone } from "@/domain/consent";
 import { newId } from "@/lib/format";
 
 export const FOLLOW_UP_AFTER_DAYS = 2;
@@ -26,8 +27,16 @@ export function hasCallbackConsent(call: Call): boolean {
  * Planifie les suivis de soumission dus : intention demande_soumission,
  * statut suivi_requis, appel vieux d'au moins FOLLOW_UP_AFTER_DAYS jours,
  * consentement capté, et AUCUN suivi déjà planifié/envoyé pour cet appel.
+ * `revokedPhones` (numéros canoniques, coffre ADR-018) : une révocation
+ * l'emporte sur tout — même un consentement capté avant elle.
  */
-export function planQuoteFollowUps(company: Company, calls: Call[], existingActions: ScalyAction[], now = new Date()): ScalyAction[] {
+export function planQuoteFollowUps(
+  company: Company,
+  calls: Call[],
+  existingActions: ScalyAction[],
+  now = new Date(),
+  revokedPhones: Set<string> = new Set(),
+): ScalyAction[] {
   const cutoff = now.getTime() - FOLLOW_UP_AFTER_DAYS * 24 * 3600 * 1000;
   const alreadyFollowed = new Set(
     existingActions.filter((a) => a.callId && a.payload?.kind === "suivi_soumission").map((a) => a.callId as string),
@@ -40,7 +49,8 @@ export function planQuoteFollowUps(company: Company, calls: Call[], existingActi
         c.intelligence.finalStatus === "suivi_requis" &&
         new Date(c.startedAt).getTime() <= cutoff &&
         !alreadyFollowed.has(c.id) &&
-        hasCallbackConsent(c),
+        hasCallbackConsent(c) &&
+        !revokedPhones.has(canonicalPhone(c.fromNumber)),
     )
     .map((c): ScalyAction => {
       const nowIso = new Date().toISOString();
