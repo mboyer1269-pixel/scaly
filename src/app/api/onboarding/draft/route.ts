@@ -8,10 +8,16 @@ import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
 import { DEFAULT_COMPANY_ID } from "@/data/companies";
 import { draftFromWebsite, OnboardingNotConfiguredError } from "@/services/onboarding";
+import { clientKey, createRateLimiter, tooManyRequests } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
 
+// Coût LLM + fetch externe par requête : 5 brouillons / 10 min / client.
+const limiter = createRateLimiter(5, 10 * 60_000);
+
 export async function POST(req: Request) {
+  const rl = limiter.check(clientKey(req));
+  if (!rl.allowed) return tooManyRequests(rl.retryAfterSec);
   let body: { url?: string; blurb?: string };
   try {
     body = (await req.json()) as { url?: string; blurb?: string };

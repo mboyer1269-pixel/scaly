@@ -10,6 +10,7 @@
 import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
 import { buildDailyDigest } from "@/services/digest";
+import { alertAlreadySent, buildOverageAlert, overageAuditDetail, OVERAGE_AUDIT_EVENT } from "@/services/overage";
 import { planQuoteFollowUps } from "@/services/follow-up";
 import { executeActionLive } from "@/services/action-engine";
 import { isSmsConfigured, sendSms } from "@/adapters/integrations/twilio-sms";
@@ -58,6 +59,26 @@ async function handle(req: Request) {
       event: "pouls_quotidien",
       detail: `${sent ? "ENVOYÉ" : "NON ENVOYÉ"} · ${digest.hotCount} chauds, ${digest.unhappyCount} mécontents, ${digest.savedCount} sauvés, ${followUps.length} suivi(s) J+2 · ${detail}`,
     });
+    // 3) Alerte de dépassement de minutes (P4) — une seule par seuil et par mois.
+    const alert = buildOverageAlert(company, calls);
+    if (alert && !alertAlreadySent(await store.getAuditLog(300), company.id, alert)) {
+      let alertStatus: "envoye" | "journalise" | "echec" = "journalise";
+      if (isSmsConfigured()) {
+        try {
+          await sendSms(company.transferPhone, alert.smsText);
+          alertStatus = "envoye";
+        } catch {
+          alertStatus = "echec"; // non dédupliqué : retentée au prochain passage
+        }
+      }
+      await store.recordAudit({
+        companyId: company.id,
+        actor: "system",
+        event: OVERAGE_AUDIT_EVENT,
+        detail: overageAuditDetail(alert, alertStatus),
+      });
+    }
+
     results.push({ companyId: company.id, sent, followUpsPlanned: followUps.length, detail });
   }
 
