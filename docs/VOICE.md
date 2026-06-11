@@ -1,9 +1,15 @@
 # Infrastructure vocale — plan P2
 
 ## État actuel (honnête)
+- **P2A ✅ — Voice Runtime Lab (ADR-014)** : le cerveau conversationnel existe et est testé.
+  - `services/voice-runtime.ts` : réducteur pur `(session, tour) → session`, machine à 12 états, barge-in, urgence fast-track, conflits de champs, transfert humain non négociable.
+  - `services/voice-extraction.ts` / `voice-language.ts` : NLU à règles FR-QC/EN (extraction progressive avec confiance + evidence), langue par tour + dominante.
+  - 6 scénarios golden (`data/voice-scenarios.ts`) verrouillés en CI et rejoués en direct dans `/status` ; UI `/voice-lab` (pas-à-pas, autoplay, mode libre).
+  - Boucle de valeur : session → `Call` analysé par le même IntelligenceEngine/ActionEngine (`voice-convert.ts`) ; `VoiceSession` persistée (Prisma) avec purge Loi 25 (turns/events purgés, fields/telemetry conservés).
+  - Latences SIMULÉES, marquées `simulated:true` partout — les cibles p50/p95 restent des hypothèses jusqu'à P2B.
 - `adapters/voice/types.ts` : interfaces `TelephonyProvider`, `SpeechToTextProvider`, `TextToSpeechProvider`, `RealtimeDialogueProvider`, événements de session, `NotConfiguredError`.
 - Seul `MockDialogueProvider` est opérationnel (texte). Twilio / OpenAI Realtime / ElevenLabs / Whisper = stubs typés qui échouent explicitement sans configuration.
-- AUCUN appel téléphonique réel n'est possible aujourd'hui.
+- AUCUN appel téléphonique réel n'est possible aujourd'hui (P2B).
 
 ## Topologie cible
 1. Numéro Twilio par client (ou SIP refer du numéro existant en renvoi d'appel — option zéro-portabilité pour signer vite).

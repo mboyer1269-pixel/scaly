@@ -20,7 +20,8 @@ Livré : domaine complet, 15 scripts, simulateur déterministe, intelligence rul
 **Risque principal** : dérive de scope sur l'auth multi-tenant → Clerk pris, on avance.
 
 ## P2 — La voix réelle (≈ 3-5 semaines, le vrai mur technique)
-Suivre docs/VOICE.md étape par étape (Twilio Media Streams → scaly-realtime → OpenAI Realtime, plan B pipeline). Jalons mesurables : (1) echo audio ; (2) premier dialogue IA ; (3) agent qui suit un script avec transfert humain ; (4) 50 appels tests FR/EN dont urgences ; (5) latence perçue < 800 ms p50, < 1200 ms p95.
+**P2A — Voice Runtime Lab ✅ (ADR-014)** : cerveau conversationnel pur et déterministe — machine à états (12 états), NLU à règles FR-QC/EN, extraction progressive (statut/confiance/evidence, conflits explicites), langue par tour + dominante, barge-in, urgence fast-track, refus spam, transfert humain non négociable, flight recorder, latences simulées (déclarées telles) sous budget. 6 scénarios golden en CI + rejoués dans `/status` ; UI `/voice-lab` ; session → Call via le même IntelligenceEngine/ActionEngine ; `VoiceSession` persistée + purge Loi 25.
+**P2B — Transport réel ⏳** : suivre docs/VOICE.md étape par étape (Twilio Media Streams → scaly-realtime → OpenAI Realtime, plan B pipeline). Jalons mesurables : (1) echo audio ; (2) premier dialogue IA ; (3) agent qui suit un script avec transfert humain ; (4) 50 appels tests FR/EN dont urgences ; (5) latence perçue < 800 ms p50, < 1200 ms p95 — MESURÉE, en remplacement des latences simulées de P2A.
 Conformité bloquante : avis juridique Loi 25, DPA fournisseurs, RPRP, politique de confidentialité.
 **KPI** : taux de complétion d'appel test > 90 %, transfert humain fonctionne à 100 %. **Coût estimé** : 50-150 $/mois infra + coûts API par appel.
 **Risques** : latence FR-QC des modèles temps réel (mitigation : plan B pipeline) ; accent québécois en STT (mitigation : jeu de test dédié, choix STT par benchmark).
