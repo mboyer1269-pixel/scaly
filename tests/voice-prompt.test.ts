@@ -40,10 +40,18 @@ describe("buildRealtimePrompt", () => {
     expect(prompt).toContain(company.transferPhone);
   });
 
-  it("contient les accueils FR et EN du script et le bilinguisme", () => {
+  it("contient les accueils FR et EN et le bilinguisme — l'accueil de l'AGENT (configurable) prime", () => {
     expect(prompt).toContain("français québécois");
     expect(prompt).toContain("bascule IMMÉDIATEMENT en anglais");
+    expect(prompt).toContain(agent.greetingScript.replace(/\{company\}/g, company.name).replace(/\{agent\}/g, agent.displayName));
     expect(prompt).toContain(script.greetingEn.replace(/\{company\}/g, company.name).replace(/\{agent\}/g, agent.displayName));
+  });
+
+  it("accent : québécois exigé, jamais anglophone, prononciations de référence", () => {
+    expect(prompt).toContain("accent du Québec");
+    expect(prompt).toContain("JAMAIS un accent anglophone");
+    expect(prompt).toContain("Prononciations de référence");
+    expect(prompt).toContain(company.city);
   });
 
   it("liste chaque question de qualification avec son statut requis/optionnel", () => {
