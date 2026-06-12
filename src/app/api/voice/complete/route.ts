@@ -10,6 +10,7 @@ import { getScriptById } from "@/data/industry-scripts";
 import { intelligenceEngine } from "@/services/intelligence";
 import { planActionsForCall } from "@/services/action-engine";
 import { consentFromCall } from "@/services/consent";
+import { isSmsConfigured, sendSms } from "@/adapters/integrations/twilio-sms";
 import { newId } from "@/lib/format";
 import type { Call, TranscriptTurn } from "@/domain/call";
 import type { LanguageCode } from "@/domain/company";
@@ -87,6 +88,23 @@ export async function POST(req: Request) {
 
   const actions = planActionsForCall(call, company);
   await store.addCall(call, actions);
+
+  // SMS de contexte au transfert : 36 % des gens détestent répéter leur
+  // problème à l'humain après l'IA (stats 2026) — l'humain qui décroche
+  // reçoit le résumé en même temps que l'appel. Échec non bloquant.
+  if (body.transferred && isSmsConfigured()) {
+    const i = call.intelligence;
+    const who = call.callerName ?? call.fromNumber;
+    try {
+      await sendSms(
+        company.transferPhone,
+        `Scaly — transfert en cours : ${who}. ${i?.summary ?? "Résumé indisponible."} Rappel : ${call.fromNumber}.`,
+      );
+      await store.recordAudit({ companyId: company.id, actor: "scaly-realtime", event: "contexte_transfert_envoyé", detail: `SMS à ${company.transferPhone} pour ${call.id}` });
+    } catch {
+      // L'appel transféré reste prioritaire — l'échec du SMS est visible par l'absence d'audit.
+    }
+  }
 
   // Coffre de consentements (ADR-018) : la réponse captée en appel devient
   // un enregistrement opposable par PERSONNE (oui ET non).

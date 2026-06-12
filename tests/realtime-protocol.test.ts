@@ -31,7 +31,7 @@ describe("session OpenAI Realtime (forme GA — vérifiée contre l'exemple offi
       type: string;
       output_modalities: string[];
       audio: {
-        input: { format: { type: string }; turn_detection: { type: string }; transcription: { model: string } };
+        input: { format: { type: string }; turn_detection: { type: string; eagerness?: string; interrupt_response?: boolean }; transcription: { model: string; language?: string } };
         output: { format: { type: string }; voice: string };
       };
       instructions: string;
@@ -47,10 +47,12 @@ describe("session OpenAI Realtime (forme GA — vérifiée contre l'exemple offi
     expect(session.session.audio.output.voice).toBe("marin");
   });
 
-  it("VAD serveur (barge-in), transcription d'entrée et prompt système", () => {
-    expect(session.session.audio.input.turn_detection.type).toBe("server_vad");
+  it("VAD sémantique (barge-in natif), transcription FR et prompt système", () => {
+    expect(session.session.audio.input.turn_detection.type).toBe("semantic_vad");
+    expect(session.session.audio.input.turn_detection.interrupt_response).toBe(true);
     expect(session.session.instructions).toBe("PROMPT_TEST");
     expect(session.session.audio.input.transcription.model).toBe("whisper-1");
+    expect(session.session.audio.input.transcription.language).toBe("fr");
   });
 
   it("expose l'outil transfer_to_human", () => {
