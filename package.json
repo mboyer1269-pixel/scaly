@@ -16,7 +16,8 @@
     "db:seed": "tsx prisma/seed.ts",
     "db:purge": "tsx scripts/purge.ts",
     "eval:golden": "tsx scripts/eval-golden.ts",
-    "realtime": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import=tsx realtime/server.ts"
+    "realtime": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import=tsx realtime/server.ts",
+    "relay": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import=tsx realtime/relay-server.ts"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

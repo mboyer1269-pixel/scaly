@@ -28,6 +28,46 @@
 - `adapters/voice/types.ts` : interfaces `TelephonyProvider`, `SpeechToTextProvider`, `TextToSpeechProvider`, `RealtimeDialogueProvider`, `NotConfiguredError`.
 - ElevenLabs / Whisper = stubs typés (plan B pipeline STT→LLM→TTS si la latence FR-QC d'OpenAI Realtime déçoit).
 
+## Prototype A/B — ConversationRelay (voix fr-CA NATIVE)
+Le plan B, version gérée par Twilio : `<Connect><ConversationRelay>` porte l'ASR
+et la TTS (vraie voix canadienne-française — Polly Gabrielle par défaut), notre
+relais (`realtime/relay-server.ts`, port 8082) ne voit que du texte et appelle
+un LLM rapide en streaming. **Hypothèse à trancher À L'OREILLE** : accent
+québécois authentique > voix OpenAI, sans payer trop cher en latence
+(pipeline ASR→LLM→TTS contre audio↔audio).
+
+- **Le champion n'est PAS touché** : même webhook, bascule par
+  `SCALY_VOICE_ENGINE=relay` — on retire la variable, le champion reprend.
+- Même contexte (`/api/voice/context`), même prompt champion + règles TTS
+  (`withRelayTtsRules`), même persistance (`/api/voice/complete`, source `live`).
+- L'accueil est parlé par Twilio (`welcomeGreeting`) et inscrit dans
+  l'historique LLM — l'agente ne salue jamais deux fois.
+- Barge-in : Twilio coupe la TTS lui-même (message `interrupt`) ; le relais
+  avorte le flux LLM et tronque le transcript à ce qui a VRAIMENT été dit.
+- Latence : `RelayLatencyMeter` mesure transcript→premier jeton (cerveau
+  SEULEMENT — l'ASR final et la synthèse Twilio sont hors de notre vue). La
+  comparaison se fait à l'oreille + logs Twilio, jamais sur `brainMs` seul.
+
+### Runbook A/B
+0. **Pré-requis une fois** : activer ConversationRelay (Console Twilio →
+   Voice → ConversationRelay → onboarding, l'accès n'est PAS instantané).
+1. Lancer le relais : `npm run relay` → `http://localhost:8082/health` doit
+   dire `configured: true`. Tunnel : `ngrok http 8082`.
+2. `.env.local` : `SCALY_VOICE_ENGINE=relay`,
+   `SCALY_RELAY_WS_URL=wss://<ngrok-relay>/relay`. Optionnels :
+   `SCALY_RELAY_TTS_PROVIDER` (déf. `Amazon`), `SCALY_RELAY_VOICE`
+   (déf. `Gabrielle-Neural` ; essayer `Liam-Neural`, voix Google/ElevenLabs),
+   `SCALY_RELAY_LANGUAGE` (déf. `fr-CA`), `SCALY_RELAY_STT_PROVIDER`
+   (déf. `Google`), `SCALY_RELAY_SPEECH_MODEL`, `SCALY_RELAY_LLM_MODEL`
+   (déf. `gpt-4.1-mini`), `REALTIME_RELAY_PORT` (déf. 8082).
+3. Appeler le numéro. Comparer au champion sur la MÊME grille que les appels
+   1-5 : accent/naturel de la voix, latence à l'oreille, coupures, chiffres et
+   adresses, transfert humain. Noter sur 10, transcript dans `/calls`.
+4. Retour au champion : retirer `SCALY_VOICE_ENGINE` (redémarrer l'app Next).
+5. Limites connues du prototype : voix UNIQUE par appel (le bilinguisme FR→EN
+   sonnera accenté tant qu'on n'envoie pas le message `language` en cours de
+   session) ; pas de préambules parlés pendant la réflexion.
+
 ## Topologie cible
 1. Numéro Twilio par client (ou SIP refer du numéro existant en renvoi d'appel — option zéro-portabilité pour signer vite).
 2. Appel entrant → webhook Twilio → `scaly-realtime` ouvre le Media Stream (WebSocket bidirectionnel, audio µ-law 8 kHz).
