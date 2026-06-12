@@ -47,10 +47,9 @@ describe("buildRealtimePrompt", () => {
     expect(prompt).toContain(script.greetingEn.replace(/\{company\}/g, company.name).replace(/\{agent\}/g, agent.displayName));
   });
 
-  it("accent : québécois exigé, jamais anglophone, prononciations de référence", () => {
-    expect(prompt).toContain("accent du Québec");
-    expect(prompt).toContain("JAMAIS un accent anglophone");
-    expect(prompt).toContain("Prononciations de référence");
+  it("prononciation : noms propres à la française (sobre, données du tenant)", () => {
+    expect(prompt).toContain("# Prononciation");
+    expect(prompt).toContain("jamais à l'anglaise");
     expect(prompt).toContain(company.city);
   });
 

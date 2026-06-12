@@ -47,9 +47,8 @@ describe("session OpenAI Realtime (forme GA — vérifiée contre l'exemple offi
     expect(session.session.audio.output.voice).toBe("marin");
   });
 
-  it("VAD sémantique (barge-in natif), transcription FR et prompt système", () => {
-    expect(session.session.audio.input.turn_detection.type).toBe("semantic_vad");
-    expect(session.session.audio.input.turn_detection.interrupt_response).toBe(true);
+  it("VAD serveur 350 ms (config championne mesurée), transcription FR et prompt système", () => {
+    expect(session.session.audio.input.turn_detection.type).toBe("server_vad");
     expect(session.session.instructions).toBe("PROMPT_TEST");
     expect(session.session.audio.input.transcription.model).toBe("whisper-1");
     expect(session.session.audio.input.transcription.language).toBe("fr");
