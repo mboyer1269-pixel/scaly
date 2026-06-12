@@ -60,11 +60,11 @@ export function openAiSessionUpdate(systemPrompt: string, voice: string, model =
       audio: {
         input: {
           format: { type: "audio/pcmu" },
-          // VAD SÉMANTIQUE : décide si l'appelant a fini selon SES MOTS, pas
-          // un chrono — un « euh… » qui traîne attend, une phrase nette part
-          // tout de suite. Règle le cas des chiffres dictés avec pauses
-          // (appels réels n° 2-3) mieux que server_vad+350 ms.
-          turn_detection: { type: "semantic_vad", eagerness: "auto", interrupt_response: true },
+          // server_vad 350 ms : config CHAMPIONNE mesurée (211-386 ms perçues).
+          // semantic_vad testé à l'appel réel n° 5 : latences 571-2014 ms +
+          // conflit avec notre barge-in manuel (response_cancel_not_active) —
+          // retiré sur preuve, à réévaluer quand l'API réglera le conflit.
+          turn_detection: { type: "server_vad", silence_duration_ms: 350 },
           // Indice de langue : sans lui, Whisper transcrivait le FR-QC en
           // anglais/allemand (vu à l'appel réel n° 3) — le verbatim des
           // consentements et les transcripts en dépendent.

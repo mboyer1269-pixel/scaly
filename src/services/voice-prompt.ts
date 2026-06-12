@@ -143,14 +143,13 @@ export function buildRealtimePrompt({ company, agent, script, callerNumber, know
       : `Default language: English. If the caller speaks French, switch immediately and continue in French. Always reply in the language of the caller's last turn.`,
   );
 
-  // --- Accent et prononciation (la voix DOIT être d'ici) ---
+  // --- Prononciation (sobre : une consigne théâtrale sur l'accent produit une caricature) ---
   if (fr) {
-    lines.push(`# Accent et prononciation`);
+    lines.push(`# Prononciation`);
     lines.push(
-      `Tu parles avec l'accent du Québec — JAMAIS un accent anglophone ni un accent français de France. ` +
-        `Les noms propres se prononcent À LA FRANÇAISE. Prononciations de référence : ` +
-        `« ${company.name} » (nom de l'entreprise, prononciation française soignée), « ${company.city} », « ${agent.displayName} ». ` +
-        `Les numéros se disent en français : « huit, un, neuf » — jamais « eight, one, nine ».`,
+      `Prononce les noms propres à la française — en particulier « ${company.name} » et « ${company.city} » ` +
+        `(jamais à l'anglaise). Les chiffres se disent en français (« huit, un, neuf »). ` +
+        `Ton français est naturel et d'ici, sans exagération.`,
     );
   }
 
