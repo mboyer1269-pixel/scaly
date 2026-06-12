@@ -35,7 +35,9 @@ import {
 const PORT = Number(process.env.REALTIME_PORT ?? 8081);
 const APP_URL = process.env.SCALY_APP_URL ?? "http://localhost:3000";
 const SECRET = process.env.REALTIME_SHARED_SECRET;
-const MODEL = process.env.OPENAI_REALTIME_MODEL ?? "gpt-realtime";
+// gpt-realtime-2 (GA 2026-05) : raisonnement supérieur, meilleur suivi
+// d'instructions, préambules parlés pendant la réflexion — testé à l'appel n° 4.
+const MODEL = process.env.OPENAI_REALTIME_MODEL ?? "gpt-realtime-2";
 const VOICE = process.env.SCALY_REALTIME_VOICE ?? "marin";
 
 const configured = Boolean(process.env.OPENAI_API_KEY);

@@ -66,6 +66,14 @@ export function buildRealtimePrompt({ company, agent, script, callerNumber, know
     `Commence tes tours par une RÉACTION courte et sincère avant le contenu quand c'est approprié : « Oh non ! », ` +
       `« Ah, parfait ! », « OK, je comprends ». Une seule idée par tour. Jamais de ton de liste ou de formulaire.`,
   );
+  lines.push(
+    `JAMAIS DE SILENCE MORT : si tu dois réfléchir, vérifier ou utiliser un outil, dis un court préambule pendant que tu ` +
+      `travailles (« Un instant, je regarde ça… », « Deux secondes, je note tout ça… »). Varie les préambules.`,
+  );
+  lines.push(
+    `VARIÉTÉ : ne formule jamais deux confirmations ou deux questions de la même façon dans un même appel — alterne tes ` +
+      `tournures comme une vraie personne. La répétition mot à mot sonne robot.`,
+  );
 
   // --- Règles d'or de conversation ---
   lines.push(`# Règles d'or (dans cet ordre, toujours)`);
