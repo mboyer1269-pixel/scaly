@@ -57,7 +57,7 @@ interface SessionLog {
 async function fetchContext(
   companyId: string,
   from: string,
-): Promise<{ company: Company; agent: VoiceAgentConfig; script: IndustryScript; knownCaller?: { callCount: number; name?: string; address?: string; lastCallAt?: string } }> {
+): Promise<{ company: Company; agent: VoiceAgentConfig; script: IndustryScript; callerMemory?: import("../src/domain/caller").CallerMemory }> {
   const qs = `companyId=${encodeURIComponent(companyId)}&from=${encodeURIComponent(from)}`;
   const res = await fetch(`${APP_URL}/api/voice/context?${qs}`, {
     headers: SECRET ? { "x-scaly-secret": SECRET } : {},
