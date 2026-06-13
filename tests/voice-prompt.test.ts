@@ -7,6 +7,7 @@ import { describe, expect, it } from "vitest";
 import { buildRealtimePrompt, speakablePhone } from "@/services/voice-prompt";
 import { SEED_AGENTS, SEED_COMPANIES } from "@/data/companies";
 import { getScriptById } from "@/data/industry-scripts";
+import type { CallerMemory } from "@/domain/caller";
 
 const company = SEED_COMPANIES[0];
 const agent = SEED_AGENTS.find((a) => a.companyId === company.id)!;
@@ -78,22 +79,91 @@ describe("buildRealtimePrompt", () => {
     expect(prompt).toContain("Quel est le meilleur numéro pour vous rejoindre");
   });
 
-  it("anti-hallucination : aucun dossier prétendu ; « comme d'habitude » interdit sans Client connu", () => {
+  it("anti-hallucination : aucun dossier prétendu ; « comme d'habitude » interdit sans dossier client", () => {
     expect(prompt).toContain("Tu n'as AUCUNE information sur l'appelant");
     expect(prompt).toContain("comme d'habitude");
-    expect(prompt).not.toContain("Client connu");
+    expect(prompt).not.toContain("Dossier client");
   });
 
-  it("client connu : SEULES les vraies données du dossier entrent, utilisées avec tact", () => {
-    const known = buildRealtimePrompt({
-      company, agent, script, callerNumber: "+18194211269",
-      knownCaller: { callCount: 2, name: "Richard Ballonnet", address: "5291 chemin du Lac-Héduc, Montpellier", lastCallAt: "2026-06-11T14:00:00.000Z" },
-    });
-    expect(known).toContain("Client connu (données RÉELLES");
+  it("dossier client : historique, champs confirmés, suivi ouvert et règles strictes", () => {
+    const callerMemory: CallerMemory = {
+      callCount: 2,
+      firstCallAt: "2026-06-07",
+      lastCallAt: "2026-06-11",
+      name: "Richard Ballonnet",
+      address: "5291 chemin du Lac-Héduc, Montpellier",
+      phoneConfirmed: true,
+      recentCalls: [
+        {
+          date: "2026-06-11",
+          intent: "demande_soumission",
+          summary: "Remplacement toiture bungalow, client dispo le matin.",
+          finalStatus: "suivi_requis",
+          hasPendingFollowUp: true,
+        },
+        {
+          date: "2026-06-07",
+          intent: "urgence",
+          summary: "Infiltration d'eau au sous-sol.",
+          finalStatus: "transfere",
+          hasPendingFollowUp: false,
+        },
+      ],
+      confirmedFields: {
+        nom: "Richard Ballonnet",
+        adresse: "5291 chemin du Lac-Héduc, Montpellier",
+      },
+      hasPendingFollowUp: true,
+    };
+    const known = buildRealtimePrompt({ company, agent, script, callerNumber: "+18194211269", callerMemory });
+
+    // Structure du dossier
+    expect(known).toContain("Dossier client (données RÉELLES");
     expect(known).toContain("Richard Ballonnet");
     expect(known).toContain("5291 chemin du Lac-Héduc");
-    expect(known).toContain("C'est toujours au");
-    expect(known).toContain("prends SA version");
+
+    // Historique
+    expect(known).toContain("Demande de soumission");
+    expect(known).toContain("Suivi requis");
+    expect(known).toContain("Urgence");
+    expect(known).toContain("Transféré");
+
+    // Suivi ouvert
+    expect(known).toContain("Suivi ouvert");
+    expect(known).toContain("Remplacement toiture bungalow");
+
+    // Règles anti-hallucination
+    expect(known).toContain("prends sa version");
+    expect(known).toContain("Ne jamais inférer");
+    expect(known).toContain("dans notre dossier");
+  });
+
+  it("dossier client : question déjà connue au dossier → CONFIRMÉE dans la liste, jamais redemandée", () => {
+    const callerMemory: CallerMemory = {
+      callCount: 1,
+      firstCallAt: "2026-06-07",
+      lastCallAt: "2026-06-07",
+      name: "Marie Coulombe",
+      address: "99 rang des Bouleaux, Gatineau",
+      phoneConfirmed: true,
+      recentCalls: [],
+      confirmedFields: {
+        nom: "Marie Coulombe",
+        adresse: "99 rang des Bouleaux, Gatineau",
+        description: "Inspection et réparation de toiture après tempête.",
+      },
+      hasPendingFollowUp: false,
+    };
+    const known = buildRealtimePrompt({ company, agent, script, callerNumber: "+18194211269", callerMemory });
+
+    // Les champs connus doivent porter la mention DÉJÀ AU DOSSIER dans la liste de questions
+    expect(known).toContain("DÉJÀ AU DOSSIER");
+    expect(known).toContain("99 rang des Bouleaux");
+    // La question brute « Quel est votre adresse » ne doit plus apparaître
+    const adresseQuestion = script.questions.find((q) => q.fieldKey === "adresse");
+    if (adresseQuestion?.question) {
+      expect(known).not.toContain(adresseQuestion.question);
+    }
   });
 
   it("inclut les critères d'urgence et le fast-track critique", () => {

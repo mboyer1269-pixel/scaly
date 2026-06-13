@@ -9,7 +9,8 @@ import { getStore } from "@/server/store";
 import { getScriptById } from "@/data/industry-scripts";
 import { DEFAULT_COMPANY_ID } from "@/data/companies";
 import { canonicalPhone } from "@/domain/consent";
-import type { KnownCaller } from "@/services/voice-prompt";
+import { buildCallerMemory } from "@/services/caller-memory";
+import type { CallerMemory } from "@/domain/caller";
 
 export const dynamic = "force-dynamic";
 
@@ -35,23 +36,17 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: `Contexte incomplet pour ${companyId}` }, { status: 404 });
   }
 
-  // Dossier client RÉEL : historique d'appels de ce numéro. L'agente ne dira
-  // « comme la dernière fois » QUE si ces données existent vraiment.
-  let knownCaller: KnownCaller | undefined;
+  // Dossier client synthétisé : historique de tous les appels de ce numéro.
+  // buildCallerMemory() retourne undefined si aucun appel antérieur — l'agente
+  // ne prétendra jamais avoir une mémoire qu'elle n'a pas.
+  let callerMemory: CallerMemory | undefined;
   const canon = canonicalPhone(from);
   if (canon.length === 10) {
-    const previous = (await store.listCalls(companyId)).filter((c) => canonicalPhone(c.fromNumber) === canon);
-    if (previous.length > 0) {
-      const name = previous.find((c) => c.callerName || c.intelligence?.collectedFields?.nom);
-      const address = previous.find((c) => c.intelligence?.collectedFields?.adresse);
-      knownCaller = {
-        callCount: previous.length,
-        name: name?.callerName ?? name?.intelligence?.collectedFields?.nom,
-        address: address?.intelligence?.collectedFields?.adresse,
-        lastCallAt: previous[0].startedAt,
-      };
-    }
+    const previous = (await store.listCalls(companyId)).filter(
+      (c) => canonicalPhone(c.fromNumber) === canon,
+    );
+    callerMemory = buildCallerMemory(previous);
   }
 
-  return NextResponse.json({ company, agent, script, knownCaller });
+  return NextResponse.json({ company, agent, script, callerMemory });
 }

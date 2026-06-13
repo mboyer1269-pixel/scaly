@@ -12,13 +12,25 @@ import type { Company } from "@/domain/company";
 import type { VoiceAgentConfig } from "@/domain/agent";
 import type { IndustryScript } from "@/domain/script";
 import { FIELD_LABELS } from "@/domain/script";
+import type { FinalStatus } from "@/domain/call";
+import { INTENT_LABELS } from "@/domain/call";
+import type { CallerMemory } from "@/domain/caller";
 
-/** Dossier client RÉEL (historique d'appels du même numéro) — jamais inventé. */
-export interface KnownCaller {
-  callCount: number;
-  name?: string;
-  address?: string;
-  lastCallAt?: string;
+const FINAL_STATUS_LABELS: Record<FinalStatus, string> = {
+  resolu_par_ia: "Résolu par IA",
+  transfere: "Transféré",
+  suivi_requis: "Suivi requis",
+  perdu: "Perdu",
+  ignore_spam: "Spam ignoré",
+};
+
+/** « 2026-06-07 » → « 7 juin 2026 » */
+function formatDate(iso: string): string {
+  const months = ["janv.", "févr.", "mars", "avr.", "mai", "juin", "juill.", "août", "sept.", "oct.", "nov.", "déc."];
+  const parts = iso.slice(0, 10).split("-");
+  if (parts.length !== 3) return iso;
+  const [year, month, day] = parts;
+  return `${parseInt(day)} ${months[parseInt(month) - 1]} ${year}`;
 }
 
 export interface RealtimePromptContext {
@@ -27,8 +39,8 @@ export interface RealtimePromptContext {
   script: IndustryScript;
   /** Numéro de l'afficheur (Twilio `From`) — si connu, on CONFIRME au lieu de faire dicter. */
   callerNumber?: string;
-  /** Historique réel de ce numéro — alimente « comme la dernière fois » HONNÊTEMENT. */
-  knownCaller?: KnownCaller;
+  /** Dossier synthétisé de l'appelant — alimente la mémoire HONNÊTEMENT. */
+  callerMemory?: CallerMemory;
 }
 
 /** « +18194211269 » → « 819 421-1269 » (lisible à voix haute). Null si non exploitable. */
@@ -39,7 +51,7 @@ export function speakablePhone(raw?: string): string | null {
   return `${digits.slice(0, 3)} ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
-export function buildRealtimePrompt({ company, agent, script, callerNumber, knownCaller }: RealtimePromptContext): string {
+export function buildRealtimePrompt({ company, agent, script, callerNumber, callerMemory }: RealtimePromptContext): string {
   const lines: string[] = [];
   const fr = company.defaultLanguage === "fr";
   const callerPhone = speakablePhone(callerNumber);
@@ -104,24 +116,66 @@ export function buildRealtimePrompt({ company, agent, script, callerNumber, know
   lines.push(`# Ce que tu sais — et RIEN d'autre`);
   lines.push(
     `Tu n'as AUCUNE information sur l'appelant à part ce qui est écrit dans ce prompt. INTERDIT de dire « comme d'habitude », ` +
-      `« la même adresse que d'habitude », « à votre dossier » ou de laisser croire que tu as un historique${knownCaller ? " AU-DELÀ de la section « Client connu » ci-dessous" : ""}. ` +
-      `Si l'appelant demande ce que tu as au dossier, réponds honnêtement et exactement ce que tu as${callerPhone ? ` (le numéro de l'afficheur${knownCaller ? " et les informations de la section Client connu" : ", rien d'autre"})` : ""}.`,
+      `« la même adresse que d'habitude », « à votre dossier » ou de laisser croire que tu as un historique${callerMemory ? " AU-DELÀ de la section « Dossier client » ci-dessous" : ""}. ` +
+      `Si l'appelant demande ce que tu as au dossier, réponds honnêtement et exactement ce que tu as${callerPhone ? ` (le numéro de l'afficheur${callerMemory ? " et les informations de la section Dossier client" : ", rien d'autre"})` : ""}.`,
   );
 
-  // --- Dossier client réel ---
-  if (knownCaller) {
-    lines.push(`# Client connu (données RÉELLES de notre historique d'appels)`);
+  // --- Dossier client synthétisé (mémoire inter-appels) ---
+  if (callerMemory) {
+    lines.push(`# Dossier client (données RÉELLES — cite uniquement ce que tu vois ici)`);
+
+    const who = callerMemory.name ?? "Appelant connu";
     lines.push(
-      `Ce numéro nous a déjà appelés ${knownCaller.callCount} fois.` +
-        (knownCaller.name ? ` Nom au dossier : ${knownCaller.name}.` : "") +
-        (knownCaller.address ? ` Adresse au dossier : ${knownCaller.address}.` : "") +
-        (knownCaller.lastCallAt ? ` Dernier appel : ${knownCaller.lastCallAt.slice(0, 10)}.` : ""),
+      `${who} — ${callerMemory.callCount} appel${callerMemory.callCount > 1 ? "s" : ""}. ` +
+        `Premier : ${formatDate(callerMemory.firstCallAt)}. Dernier : ${formatDate(callerMemory.lastCallAt)}.`,
     );
-    lines.push(
-      `Utilise-le naturellement et avec tact : accueille par le nom si tu l'as (« Bonjour${knownCaller.name ? ` ${knownCaller.name}` : ""} ! »), ` +
-        `et CONFIRME l'adresse au lieu de la redemander (« C'est toujours au ${knownCaller.address ?? "…"} ? »). ` +
-        `Si l'appelant corrige une information du dossier, prends SA version — le dossier peut être périmé.`,
-    );
+    if (callerMemory.name) {
+      lines.push(`Accueille par son nom dès l'accueil si possible (« Bonjour ${callerMemory.name} ! »).`);
+    }
+    if (callerMemory.address) {
+      lines.push(`Adresse au dossier : ${callerMemory.address}.`);
+    }
+
+    // Historique récent
+    if (callerMemory.recentCalls.length > 0) {
+      lines.push(`## Historique récent`);
+      for (const c of callerMemory.recentCalls) {
+        const intentLabel = INTENT_LABELS[c.intent] ?? c.intent;
+        const statusLabel = FINAL_STATUS_LABELS[c.finalStatus] ?? c.finalStatus;
+        let entry = `- ${formatDate(c.date)} : ${intentLabel}.`;
+        if (c.summary) entry += ` « ${c.summary} »`;
+        entry += ` Statut : ${statusLabel}.`;
+        lines.push(entry);
+      }
+    }
+
+    // Champs confirmés (telephone exclu : géré par l'afficheur)
+    const displayFields = Object.entries(callerMemory.confirmedFields).filter(([k]) => k !== "telephone");
+    if (displayFields.length > 0) {
+      lines.push(`## Champs déjà collectés (ne PAS redemander — CONFIRME que c'est toujours d'actualité)`);
+      for (const [key, value] of displayFields) {
+        const label = (FIELD_LABELS as Record<string, string>)[key] ?? key;
+        lines.push(`- ${label} : ${value}`);
+      }
+    }
+
+    // Suivi ouvert — le cas d'usage "rappel 3 jours après"
+    if (callerMemory.hasPendingFollowUp) {
+      const lastPending = callerMemory.recentCalls.find((c) => c.hasPendingFollowUp);
+      lines.push(`## Suivi ouvert`);
+      lines.push(
+        `Le dernier appel s'est terminé avec un suivi requis.` +
+          (lastPending?.summary ? ` Contexte : « ${lastPending.summary} ».` : "") +
+          ` Si l'appelant rappelle dans ce contexte, ouvre naturellement : ` +
+          `« Je vois qu'on avait discuté de ça la dernière fois — c'est pour ça que vous nous appelez aujourd'hui ? »`,
+      );
+    }
+
+    lines.push(`## Règles strictes pour ce dossier`);
+    lines.push(`1. La parole de l'appelant prime TOUJOURS — s'il corrige une information du dossier, prends sa version.`);
+    lines.push(`2. Ne jamais inférer ou inventer ce qui n'est pas écrit ci-dessus.`);
+    lines.push(`3. Référence le dossier par « dans notre dossier… » ou « la dernière fois… » — jamais « je sais que… ».`);
+    lines.push(`4. Si incertain : demande plutôt qu'affirmer.`);
   }
 
   // --- Numéro de l'afficheur : confirmer, jamais faire dicter ---
@@ -166,10 +220,18 @@ export function buildRealtimePrompt({ company, agent, script, callerNumber, know
   lines.push(`# Mission — qualifier l'appel`);
   lines.push(`Collecte ces informations, UNE question à la fois, dans l'ordre, sans interrogatoire (conversationnel) :`);
   for (const q of script.questions) {
-    // Le numéro de l'afficheur est connu : on CONFIRME, on ne fait jamais dicter
-    // (le modèle suit la liste — la consigne doit vivre DANS la liste).
+    // Téléphone : l'afficheur le donne déjà — on confirme, jamais on fait dicter.
     if (q.fieldKey === "telephone" && callerPhone) {
       lines.push(`- ${FIELD_LABELS[q.fieldKey]} (requis) — DÉJÀ CONNU par l'afficheur : ${callerPhone}. Confirme-le seulement, ne le fais JAMAIS dicter.`);
+      continue;
+    }
+    // Champ déjà collecté lors d'un appel précédent : confirme, ne redemande pas.
+    const knownValue = callerMemory?.confirmedFields[q.fieldKey];
+    if (knownValue) {
+      lines.push(
+        `- ${FIELD_LABELS[q.fieldKey]}${q.required ? " (requis)" : " (optionnel)"} — ` +
+          `DÉJÀ AU DOSSIER : « ${knownValue} ». Confirme que c'est toujours d'actualité — ne le redemande pas.`,
+      );
       continue;
     }
     lines.push(`- ${FIELD_LABELS[q.fieldKey]}${q.required ? " (requis)" : " (optionnel)"} — FR : « ${q.question} »${q.questionEn ? ` / EN : « ${q.questionEn} »` : ""}`);
