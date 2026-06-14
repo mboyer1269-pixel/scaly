@@ -37,6 +37,12 @@ export async function POST(req: Request) {
   }
 
   const store = getStore();
+  // ⚠️ BLOQUANT AVANT UN 2ᵉ CLIENT (ADR-017/019) — PILOTE MONO-TENANT UNIQUEMENT.
+  // Le webhook voix n'a pas de session : il résout DEFAULT_COMPANY_ID en dur.
+  // Avant d'accueillir un deuxième client, mapper le numéro APPELÉ (params["To"]
+  // ou ["Called"]) → companyId (un numéro Twilio par entreprise) et basculer le
+  // flag twilioTenantMapping du pilot gate à true. Tant que ce TODO existe,
+  // tous les appels entrants atterrissent sur le tenant démo.
   const company = await store.getCompany(DEFAULT_COMPANY_ID);
   if (!company) return xml(`<?xml version="1.0" encoding="UTF-8"?><Response><Reject /></Response>`, 200);
 

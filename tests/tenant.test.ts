@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { companyIdFromSessionClaims } from "@/server/tenant";
+import { companyIdFromSessionClaims, decideTenant } from "@/server/tenant";
+import { DEFAULT_COMPANY_ID } from "@/data/companies";
 
 describe("companyIdFromSessionClaims", () => {
   it("lit le claim metadata.companyId (session token personnalisé, ADR-013)", () => {
@@ -15,5 +16,36 @@ describe("companyIdFromSessionClaims", () => {
     expect(companyIdFromSessionClaims({})).toBeNull();
     expect(companyIdFromSessionClaims({ metadata: { companyId: "  " } })).toBeNull();
     expect(companyIdFromSessionClaims({ metadata: { companyId: 42 } })).toBeNull();
+  });
+});
+
+describe("decideTenant — le repli démo n'est JAMAIS silencieux (ADR-019)", () => {
+  it("auth désactivée → tenant démo, sans alarme (mode dev assumé)", () => {
+    expect(decideTenant(false, null)).toEqual({ companyId: DEFAULT_COMPANY_ID, source: "no-auth", warn: false });
+  });
+
+  it("auth active + claim présent → tenant explicite, sans alarme", () => {
+    expect(decideTenant(true, { metadata: { companyId: "comp_rivnord" } })).toEqual({
+      companyId: "comp_rivnord",
+      source: "claim",
+      warn: false,
+    });
+  });
+
+  it("DANGER : auth active + non-founder sans companyId → repli démo SIGNALÉ", () => {
+    const d = decideTenant(true, { metadata: { role: "owner" } });
+    expect(d.companyId).toBe(DEFAULT_COMPANY_ID);
+    expect(d.source).toBe("demo-fallback");
+    expect(d.warn).toBe(true);
+  });
+
+  it("founder sans companyId → repli démo PAR CONCEPTION, pas d'alarme (ADR-017)", () => {
+    const d = decideTenant(true, { metadata: { role: "founder" } });
+    expect(d.source).toBe("demo-fallback");
+    expect(d.warn).toBe(false);
+  });
+
+  it("rôle par défaut (owner) sans claim → signalé (jamais founder par défaut)", () => {
+    expect(decideTenant(true, {}).warn).toBe(true);
   });
 });

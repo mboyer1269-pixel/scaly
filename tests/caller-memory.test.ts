@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildCallerMemory } from "@/services/caller-memory";
+import { buildCallerMemory, selectCallerHistory } from "@/services/caller-memory";
 import type { Call } from "@/domain/call";
 
 /** Fabrique un Call minimal pour les tests — seuls les champs pertinents sont renseignés. */
@@ -122,5 +122,38 @@ describe("buildCallerMemory", () => {
     expect(mem!.confirmedFields.nom).toBe("Jean Tremblay");
     expect(mem!.confirmedFields.adresse).toBeUndefined();
     expect(mem!.confirmedFields.description).toBeUndefined();
+  });
+});
+
+describe("selectCallerHistory — les deux gardes contre la fuite de mémoire", () => {
+  const history = [
+    makeCall({ id: "a", companyId: "comp_a", fromNumber: "+18194211269", startedAt: "2026-06-10T14:00:00.000Z" }),
+    makeCall({ id: "b", companyId: "comp_a", fromNumber: "819-421-1269", startedAt: "2026-06-08T14:00:00.000Z" }),
+    makeCall({ id: "c", companyId: "comp_b", fromNumber: "+18194211269", startedAt: "2026-06-09T14:00:00.000Z" }),
+    makeCall({ id: "d", companyId: "comp_a", fromNumber: "+15145550000", startedAt: "2026-06-07T14:00:00.000Z" }),
+  ];
+
+  it("numéro inconnu (jamais vu) → aucun historique → aucune mémoire", () => {
+    expect(selectCallerHistory(history, "comp_a", "+14180000000")).toEqual([]);
+    expect(buildCallerMemory(selectCallerHistory(history, "comp_a", "+14180000000"))).toBeUndefined();
+  });
+
+  it("numéro masqué / anonyme / non canonique → AUCUNE mémoire injectée", () => {
+    for (const masked of ["anonymous", "inconnu", "", "+1819", "Restricted"]) {
+      expect(selectCallerHistory(history, "comp_a", masked)).toEqual([]);
+      expect(buildCallerMemory(selectCallerHistory(history, "comp_a", masked))).toBeUndefined();
+    }
+  });
+
+  it("numéro connu → seulement les appels de CE numéro, toutes notations confondues", () => {
+    const got = selectCallerHistory(history, "comp_a", "+18194211269");
+    expect(got.map((c) => c.id).sort()).toEqual(["a", "b"]); // pas "d" (autre numéro)
+  });
+
+  it("ANTI-CROISEMENT TENANT : un appel du même numéro chez comp_b n'entre jamais chez comp_a", () => {
+    const got = selectCallerHistory(history, "comp_a", "+18194211269");
+    expect(got.some((c) => c.id === "c")).toBe(false);
+    // Le dossier de comp_a ne compte que ses 2 appels — jamais celui de comp_b.
+    expect(buildCallerMemory(got)!.callCount).toBe(2);
   });
 });

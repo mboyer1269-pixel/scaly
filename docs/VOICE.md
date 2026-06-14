@@ -14,15 +14,39 @@
   - Fin d'appel → `/api/voice/complete` → Call `source:"live"` analysé par le même IntelligenceEngine/ActionEngine.
   - Vérifié le 2026-06-11 : compte Twilio ACTIF (créds valides), pont configuré, webhook signé OK. **Il manque : un numéro Twilio (achat ~1-2 $US/mois) + une URL publique (ngrok).**
 
-## Runbook — premier appel réel
-1. Acheter un numéro : Console Twilio → Phone Numbers → Buy (local QC, voix). Mettre `TWILIO_PHONE_NUMBER` à jour.
-2. Exposer l'app et le pont : `ngrok http 3000` (app) et `ngrok http 8081` (pont) — ou un seul tunnel + reverse proxy.
-3. `.env.local` : `SCALY_REALTIME_WS_URL=wss://<ngrok-pont>/twilio`, `SCALY_PUBLIC_URL=https://<ngrok-app>` (optionnel : sinon en-têtes x-forwarded), `REALTIME_SHARED_SECRET=<secret>` (les deux côtés).
-4. Lancer : `npm run dev` (app) + `npm run realtime` (pont). Vérifier `http://localhost:8081/health` → `configured: true`.
-5. Console Twilio → le numéro → Voice Configuration → Webhook `https://<ngrok-app>/api/voice/incoming` (POST).
-6. Appeler le numéro. Attendus : accueil de Sophie < 1 s, transcript dans `/calls` (source `live`), latences réelles dans l'audit, « je veux parler à un humain » → transfert vers `transferPhone`.
-7. Test de panne : arrêter le pont, rappeler → l'appel doit aboutir DIRECTEMENT à l'humain (repli `<Dial>`).
-8. Ensuite : les 50 appels tests FR/EN du jalon 4 (urgences simulées incluses) avant tout client réel.
+## Runbook — premier appel réel (checklist exécutable)
+
+> **Pré-vol obligatoire** : `npm run pilot:check`. Régler tout **FAIL**, lire chaque **WARN**. Le gate confirme : auth, cohérence store, secret pont, signature Twilio, transport+repli, OpenAI, posture mono-tenant, garde-fous testés.
+
+### A. Mise en place
+1. **Numéro Twilio** : Console → Phone Numbers → Buy (local QC, voix). Mettre `TWILIO_PHONE_NUMBER` à jour.
+2. **Tunnels** : `ngrok http 3000` (app) et `ngrok http 8081` (pont) — ou un seul tunnel + reverse proxy.
+3. **`.env.local`** : `SCALY_REALTIME_WS_URL=wss://<ngrok-pont>/twilio`, `SCALY_PUBLIC_URL=https://<ngrok-app>`, `REALTIME_SHARED_SECRET=<secret>` (les deux côtés), `OPENAI_API_KEY=<clé>`, `TWILIO_AUTH_TOKEN=<token>`. Pour persister les appels : `STORE_PROVIDER=prisma` + `DATABASE_URL` migrée.
+4. **Lancer** : `npm run dev` (app) + `npm run realtime` (pont).
+5. **Webhook Twilio** : Console → le numéro → Voice Configuration → `https://<ngrok-app>/api/voice/incoming` (POST).
+
+### B. Vérifications avant d'appeler (chaque case doit être cochée)
+- [ ] `npm run pilot:check` ne renvoie **aucun FAIL**.
+- [ ] App lancée (`npm run dev`).
+- [ ] Pont lancé (`npm run realtime`).
+- [ ] Santé pont : `http://localhost:8081/health` → `configured: true`.
+- [ ] Webhook Twilio configuré sur le bon numéro (POST).
+
+### C. Tests d'appel (à journaliser, noter sur 10)
+- [ ] **Repli `<Dial>` quand realtime absent** : arrêter le pont (ou retirer `SCALY_REALTIME_WS_URL`), rappeler → l'appel aboutit DIRECTEMENT à l'humain. *Le téléphone ne casse jamais.*
+- [ ] **« Je veux parler à un humain »** → transfert immédiat vers `transferPhone`.
+- [ ] **Urgence** (« j'ai de l'eau partout ») → empathie d'abord, fast-track, transfert à l'équipe de garde.
+- [ ] **FR-QC** : accent et tournures d'ici, accueil < 1 s.
+- [ ] **EN** : bascule immédiate à l'anglais si l'appelant parle anglais, puis suit sa langue.
+- [ ] **Mémoire appelant connu** : rappeler du même numéro → l'agente confirme l'adresse au dossier au lieu de la redemander (jamais inventée).
+- [ ] **Numéro inconnu / masqué** : aucun « comme la dernière fois », aucune mémoire injectée.
+- [ ] **Transcript persisté `source:"live"`** : visible dans `/calls`.
+- [ ] **Latence réelle enregistrée** : valeurs `simulated:false` dans l'audit (cibles < 800 ms p50 / < 1200 ms p95).
+- [ ] **Consentement de rappel** capté (oui/non verbatim) → enregistrement dans `/consents` (ADR-015/018).
+
+### D. Avant tout client réel
+- [ ] 50 appels tests FR/EN (urgences incluses) — jalon 4.
+- [ ] **Avant un 2ᵉ client** : implémenter le mapping numéro Twilio→`companyId` (`/api/voice/incoming`) et passer `twilioTenantMapping` à `true` dans le pilot gate (ADR-017/019). Jusque-là : **mono-tenant pilote uniquement**.
 
 ### Pile préparée (stubs honnêtes, plan B)
 - `adapters/voice/types.ts` : interfaces `TelephonyProvider`, `SpeechToTextProvider`, `TextToSpeechProvider`, `RealtimeDialogueProvider`, `NotConfiguredError`.

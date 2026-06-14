@@ -14,7 +14,7 @@
 import { auth } from "@clerk/nextjs/server";
 import type { Company } from "@/domain/company";
 import { DEFAULT_COMPANY_ID } from "@/data/companies";
-import { isAuthEnabled } from "./auth";
+import { isAuthEnabled, roleFromSessionClaims } from "./auth";
 import { getStore } from "./store";
 
 interface CompanyClaims {
@@ -29,11 +29,52 @@ export function companyIdFromSessionClaims(claims: unknown): string | null {
   return typeof id === "string" && id.trim() ? id.trim() : null;
 }
 
-/** Id d'entreprise de la session courante ; tenant démo sans auth ou sans claim. */
-export function resolveCompanyId(): string {
-  if (!isAuthEnabled()) return DEFAULT_COMPANY_ID;
+/** D'où vient le tenant résolu — pour ne JAMAIS retomber silencieusement sur la démo. */
+export type TenantSource = "claim" | "demo-fallback" | "no-auth";
+
+export interface ResolvedTenant {
+  companyId: string;
+  source: TenantSource;
+  /** true si le repli démo est DANGEREUX et doit être signalé (ADR-019). */
+  warn: boolean;
+}
+
+/**
+ * Décision de tenant, PURE et testée (ADR-019).
+ *
+ * Le piège fermé ici : auth ACTIVE + utilisateur connecté SANS companyId dans
+ * ses claims. L'ancien code retombait silencieusement sur DEFAULT_COMPANY_ID —
+ * un non-founder voyait/éditait alors les données du tenant démo (ou pire, d'un
+ * pilote). On le signale (warn=true) pour un non-founder ; le founder utilise la
+ * démo par conception (ADR-017), donc pas d'alarme pour lui.
+ */
+export function decideTenant(authEnabled: boolean, claims: unknown): ResolvedTenant {
+  if (!authEnabled) return { companyId: DEFAULT_COMPANY_ID, source: "no-auth", warn: false };
+  const claimed = companyIdFromSessionClaims(claims);
+  if (claimed) return { companyId: claimed, source: "claim", warn: false };
+  const role = roleFromSessionClaims(claims);
+  return { companyId: DEFAULT_COMPANY_ID, source: "demo-fallback", warn: role !== "founder" };
+}
+
+/** Tenant de la session courante, avec sa provenance. Émet un avertissement si le repli est dangereux. */
+export function resolveTenant(): ResolvedTenant {
+  if (!isAuthEnabled()) return { companyId: DEFAULT_COMPANY_ID, source: "no-auth", warn: false };
   const { sessionClaims } = auth();
-  return companyIdFromSessionClaims(sessionClaims) ?? DEFAULT_COMPANY_ID;
+  const decision = decideTenant(true, sessionClaims);
+  if (decision.warn) {
+    // Jamais silencieux : config incomplète d'un vrai utilisateur, à corriger
+    // (poser publicMetadata.companyId — ADR-017), pas un tenant légitime.
+    console.warn(
+      `[tenant] Auth active mais session sans companyId — repli sur le tenant démo (${DEFAULT_COMPANY_ID}). ` +
+        `Poser publicMetadata.companyId sur l'utilisateur (ADR-017).`,
+    );
+  }
+  return decision;
+}
+
+/** Id d'entreprise de la session courante ; tenant démo sans auth ou sans claim (repli signalé). */
+export function resolveCompanyId(): string {
+  return resolveTenant().companyId;
 }
 
 /** Entreprise de la session courante (undefined si l'id mappé n'existe pas en base). */
