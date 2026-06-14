@@ -10,7 +10,8 @@
  */
 import { getStore } from "@/server/store";
 import { DEFAULT_COMPANY_ID } from "@/data/companies";
-import { twimlConnectStream, twimlFallbackTransfer, validateTwilioSignature } from "@/server/twilio";
+import { getScriptById } from "@/data/industry-scripts";
+import { twimlConnectRelay, twimlConnectStream, twimlFallbackTransfer, validateTwilioSignature } from "@/server/twilio";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,44 @@ export async function POST(req: Request) {
     event: "appel_entrant_reçu",
     detail: `${callSid} de ${from}${authToken ? "" : " · signature NON vérifiée (TWILIO_AUTH_TOKEN absent)"}`,
   });
+
+  // --- Prototype A/B ConversationRelay (voix fr-CA native) ---
+  // Activé UNIQUEMENT par SCALY_VOICE_ENGINE=relay : on retire la variable,
+  // le champion Media Streams reprend tel quel. Jamais les deux à la fois —
+  // <Connect><Stream> et <Connect><ConversationRelay> s'excluent par appel.
+  const relayWsUrl = process.env.SCALY_RELAY_WS_URL;
+  if (process.env.SCALY_VOICE_ENGINE === "relay" && relayWsUrl) {
+    const agent = await store.getAgentByCompany(company.id);
+    const script = agent ? getScriptById(agent.qualificationScriptId) : undefined;
+    if (agent && script) {
+      // Même accueil que le prompt champion : celui du proprio (/agent) prime,
+      // celui du script d'industrie sert de repli.
+      const greeting = (agent.greetingScript || script.greeting)
+        .replace(/\{company\}/g, company.name)
+        .replace(/\{agent\}/g, agent.displayName);
+      await store.recordAudit({
+        companyId: company.id,
+        actor: "twilio",
+        event: "prototype_relay_servi",
+        detail: `${callSid} → ConversationRelay (${process.env.SCALY_RELAY_TTS_PROVIDER ?? "Amazon"}/${process.env.SCALY_RELAY_VOICE ?? "Gabrielle-Neural"})`,
+      });
+      return xml(
+        twimlConnectRelay(
+          relayWsUrl,
+          {
+            welcomeGreeting: greeting,
+            language: process.env.SCALY_RELAY_LANGUAGE ?? "fr-CA",
+            ttsProvider: process.env.SCALY_RELAY_TTS_PROVIDER ?? "Amazon",
+            voice: process.env.SCALY_RELAY_VOICE ?? "Gabrielle-Neural",
+            transcriptionProvider: process.env.SCALY_RELAY_STT_PROVIDER ?? "Google",
+            speechModel: process.env.SCALY_RELAY_SPEECH_MODEL,
+          },
+          { companyId: company.id, callSid, from, greeting },
+        ),
+      );
+    }
+    // Contexte incomplet pour le prototype : on retombe sur le champion.
+  }
 
   const wsUrl = process.env.SCALY_REALTIME_WS_URL;
   if (!wsUrl) {

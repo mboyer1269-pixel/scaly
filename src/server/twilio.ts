@@ -36,6 +36,39 @@ export function twimlConnectStream(wsUrl: string, parameters: Record<string, str
   return `<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="${xmlEscape(wsUrl)}">${params}</Stream></Connect></Response>`;
 }
 
+/** Options voix du prototype ConversationRelay — Twilio porte l'ASR et la TTS. */
+export interface RelayTwimlOptions {
+  /** Accueil parlé par Twilio dès le décroché (l'agente parle en premier). */
+  welcomeGreeting: string;
+  /** fr-CA par défaut : langue ASR + TTS de la session. */
+  language: string;
+  /** "Amazon" (Polly), "Google", "ElevenLabs"… */
+  ttsProvider: string;
+  /** ex. "Gabrielle-Neural" — voix fr-CA NATIVE, l'hypothèse du test A/B. */
+  voice: string;
+  /** "Google" ou "Deepgram". */
+  transcriptionProvider: string;
+  /** Modèle ASR optionnel (ex. "telephony"). */
+  speechModel?: string;
+}
+
+/**
+ * TwiML : ouvre la session ConversationRelay vers scaly-relay (prototype A/B).
+ * Contrairement au Media Stream du champion, Twilio fait l'ASR/TTS — le
+ * relais ne voit que du texte, et la voix peut être une VRAIE voix fr-CA.
+ */
+export function twimlConnectRelay(wsUrl: string, opts: RelayTwimlOptions, parameters: Record<string, string> = {}): string {
+  const attrs =
+    `url="${xmlEscape(wsUrl)}" welcomeGreeting="${xmlEscape(opts.welcomeGreeting)}" ` +
+    `language="${xmlEscape(opts.language)}" ttsProvider="${xmlEscape(opts.ttsProvider)}" voice="${xmlEscape(opts.voice)}" ` +
+    `transcriptionProvider="${xmlEscape(opts.transcriptionProvider)}"` +
+    (opts.speechModel ? ` speechModel="${xmlEscape(opts.speechModel)}"` : "");
+  const params = Object.entries(parameters)
+    .map(([name, value]) => `<Parameter name="${xmlEscape(name)}" value="${xmlEscape(value)}" />`)
+    .join("");
+  return `<?xml version="1.0" encoding="UTF-8"?><Response><Connect><ConversationRelay ${attrs}>${params}</ConversationRelay></Connect></Response>`;
+}
+
 /**
  * TwiML de repli : message court dans la langue de l'entreprise puis transfert
  * direct au numéro humain. Utilisé quand le realtime n'est pas configuré ou
