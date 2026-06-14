@@ -25,3 +25,6 @@ jobs:
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+      # Pilot Readiness Gate (ADR-019) : informatif en CI (env démo → WARN, sort
+      # en 0). Échoue seulement sur un vrai FAIL structurel (commande/test absent).
+      - run: npm run pilot:check

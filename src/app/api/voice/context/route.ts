@@ -8,8 +8,7 @@ import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
 import { getScriptById } from "@/data/industry-scripts";
 import { DEFAULT_COMPANY_ID } from "@/data/companies";
-import { canonicalPhone } from "@/domain/consent";
-import { buildCallerMemory } from "@/services/caller-memory";
+import { buildCallerMemory, selectCallerHistory } from "@/services/caller-memory";
 import type { CallerMemory } from "@/domain/caller";
 
 export const dynamic = "force-dynamic";
@@ -36,17 +35,12 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: `Contexte incomplet pour ${companyId}` }, { status: 404 });
   }
 
-  // Dossier client synthétisé : historique de tous les appels de ce numéro.
-  // buildCallerMemory() retourne undefined si aucun appel antérieur — l'agente
-  // ne prétendra jamais avoir une mémoire qu'elle n'a pas.
-  let callerMemory: CallerMemory | undefined;
-  const canon = canonicalPhone(from);
-  if (canon.length === 10) {
-    const previous = (await store.listCalls(companyId)).filter(
-      (c) => canonicalPhone(c.fromNumber) === canon,
-    );
-    callerMemory = buildCallerMemory(previous);
-  }
+  // Dossier client synthétisé : historique des appels de CE numéro pour CE
+  // tenant. selectCallerHistory() ferme les deux fuites — numéro masqué (aucune
+  // mémoire) et croisement de tenant — ; buildCallerMemory() retourne undefined
+  // sans antécédent. L'agente ne prétend jamais une mémoire qu'elle n'a pas.
+  const previous = selectCallerHistory(await store.listCalls(companyId), companyId, from);
+  const callerMemory: CallerMemory | undefined = buildCallerMemory(previous);
 
   return NextResponse.json({ company, agent, script, callerMemory });
 }

@@ -1,8 +1,25 @@
 import type { Call } from "@/domain/call";
 import type { CallerMemory, CallerCallSummary } from "@/domain/caller";
+import { canonicalPhone } from "@/domain/consent";
 
 const MAX_RECENT_CALLS = 5;
 const MAX_SUMMARY_CHARS = 150;
+
+/**
+ * Sélectionne, dans un historique d'appels, ceux qui appartiennent à CE numéro
+ * ET à CE tenant — la double garde qui empêche tout croisement de dossiers.
+ *
+ * Invariants de sécurité (testés) :
+ *  - Numéro masqué / anonyme / non canonique (≠ 10 chiffres) → [] : AUCUNE
+ *    mémoire n'est injectée (l'agente ne prétend pas reconnaître un inconnu).
+ *  - companyId obligatoire : un appel d'un AUTRE tenant n'entre jamais dans le
+ *    dossier (défense en profondeur, même si l'appelant a le même numéro).
+ */
+export function selectCallerHistory(calls: Call[], companyId: string, fromNumber: string): Call[] {
+  const canon = canonicalPhone(fromNumber);
+  if (canon.length !== 10) return [];
+  return calls.filter((c) => c.companyId === companyId && canonicalPhone(c.fromNumber) === canon);
+}
 
 /**
  * Synthétise l'historique d'appels d'un numéro en un dossier structuré prêt pour le prompt.
