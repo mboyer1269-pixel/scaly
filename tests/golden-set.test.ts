@@ -11,13 +11,13 @@ import { buildSeedData } from "@/server/seed";
 import { intelligenceEngine } from "@/services/intelligence";
 
 describe("golden set — intégrité", () => {
-  it("couvre exactement les 53 appels seed (bijection, clés uniques)", () => {
+  it("couvre exactement les 59 appels seed (bijection, clés uniques)", () => {
     const keys = GOLDEN_ANNOTATIONS.map((a) => a.key);
     expect(new Set(keys).size).toBe(keys.length);
-    expect(keys.length).toBe(53);
+    expect(keys.length).toBe(59);
 
     const cases = buildGoldenCases(); // lève si une annotation manque ou si un script est introuvable
-    expect(cases.length).toBe(53);
+    expect(cases.length).toBe(59);
   });
 
   it("les clés de génération sont stables d'un build seed à l'autre", () => {
@@ -31,8 +31,8 @@ describe("golden set — précision rules-v1 (critère P1)", () => {
   it("≥ 90 % d'accord sur intention ET urgence", async () => {
     const report = await evaluateEngine("rules-v1", (call, script) => intelligenceEngine.analyze(call, script));
     expect(report.errors).toBe(0);
-    // Mesuré le 2026-06-10 : intention 94,3 %, urgence 90,6 % (7 désaccords documentés
-    // par les notes d'annotation — limites connues du moteur à mots-clés).
+    // Mesuré le 2026-06-22 : 59 appels (53 originaux + 6 comp_maude). 5 désaccords urgence
+    // documentés — limites connues du moteur à mots-clés.
     expect(report.intentAccuracy).toBeGreaterThanOrEqual(0.9);
     expect(report.urgencyAccuracy).toBeGreaterThanOrEqual(0.9);
   });
