@@ -159,4 +159,12 @@ export const GOLDEN_ANNOTATIONS: GoldenAnnotation[] = [
   { key: "sim:comp_eclatnet|script_nettoyage|persona_presse|283", expected: { intent: "demande_soumission", urgency: "normale" }, note: "Pressé mais nettoyage post-construction planifiable." },
   { key: "sim:comp_eclatnet|script_nettoyage|persona_spam|284", expected: { intent: "spam", urgency: "basse" } },
   { key: "sim:comp_eclatnet|script_nettoyage|persona_regulier|285", expected: { intent: "demande_soumission", urgency: "normale" } },
+
+  // ---------- Simulés — Allô Maude Démo (script_domicile) ----------
+  { key: "sim:comp_maude|script_domicile|persona_magasineur|300", expected: { intent: "demande_soumission", urgency: "normale" } },
+  { key: "sim:comp_maude|script_domicile|persona_regulier|301", expected: { intent: "demande_soumission", urgency: "normale" } },
+  { key: "sim:comp_maude|script_domicile|persona_urgence|302", expected: { intent: "urgence", urgency: "critique" }, note: "Tuyau éclaté, eau active — dégât immédiat." },
+  { key: "sim:comp_maude|script_domicile|persona_presse|303", expected: { intent: "demande_soumission", urgency: "haute" }, note: "Routine mais « le plus vite possible » exprimé — urgence de timing déclarée." },
+  { key: "sim:comp_maude|script_domicile|persona_spam|304", expected: { intent: "spam", urgency: "basse" } },
+  { key: "sim:comp_maude|script_domicile|persona_regulier|305", expected: { intent: "demande_soumission", urgency: "normale" } },
 ];

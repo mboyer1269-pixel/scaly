@@ -14,6 +14,7 @@ import { roleFromSessionClaims } from "@/server/auth";
 
 const isPublicRoute = createRouteMatcher([
   "/",
+  "/allo-maude(.*)",
   "/pricing(.*)",
   "/sign-in(.*)",
   "/sign-up(.*)",

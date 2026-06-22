@@ -173,6 +173,33 @@ export const SEED_COMPANIES: Company[] = [
     planId: "starter",
     createdAt: "2026-05-05T14:00:00.000Z",
   },
+  {
+    id: "comp_maude",
+    name: "Allô Maude — Démo",
+    industry: "services_domicile",
+    sectorLabel: "Réceptionniste IA pour PME de services",
+    ownerName: "Équipe Scaly",
+    ownerEmail: "demo@allomau.de",
+    mainPhone: "514-555-0200",
+    transferPhone: "514-555-0201",
+    city: "Montréal",
+    languages: ["fr", "en"],
+    defaultLanguage: "fr",
+    tone: "chaleureux",
+    hours: { open: "07:00", close: "20:00", days: [1, 2, 3, 4, 5, 6] },
+    escalationRules: [
+      { id: "esc_maude_1", description: "Urgence critique → transfert immédiat", trigger: { type: "urgency", value: "critique" }, action: "transfer_human", target: "514-555-0201" },
+      { id: "esc_maude_2", description: "Demande d'humain → transfert direct", trigger: { type: "caller_request", value: "humain" }, action: "transfer_human", target: "514-555-0201" },
+    ],
+    essentialQuestions: ["Nom et numéro de rappel", "Description du besoin", "Adresse si intervention", "Moment souhaité"],
+    services: ["Prise de message", "Qualification d'appel", "Résumé SMS", "Transfert humain", "Suivi de rappel"],
+    serviceAreas: ["Québec"],
+    policies: ["Divulgation IA à l'accueil (Loi 25)", "Consentement de rappel capté", "Données supprimables sur demande"],
+    followUp: baseFollowUp,
+    compliance: baseCompliance,
+    planId: "pro",
+    createdAt: "2026-06-01T00:00:00.000Z",
+  },
 ];
 
 function agentFor(companyId: string, displayName: string, scriptId: string, persona: string): VoiceAgentConfig {
@@ -216,4 +243,15 @@ export const SEED_AGENTS: VoiceAgentConfig[] = [
   agentFor("comp_sourire", "Camille", "script_dentiste", "Douce et patiente. Rassure les patients anxieux."),
   agentFor("comp_drouin", "Maxime", "script_immobilier", "Professionnel et réactif. Sens de l'opportunité."),
   agentFor("comp_eclatnet", "Nadia", "script_nettoyage", "Souriante et méthodique."),
+  {
+    ...agentFor(
+      "comp_maude",
+      "Maude",
+      "script_domicile",
+      "Chaleureuse, efficace et professionnelle. Maude parle le vrai français québécois — naturel, vivant, avec les tournures d'ici. Elle accueille avec le sourire, gère les urgences avec calme, donne la consigne de sécurité qui s'impose et confirme toujours la prochaine étape concrète.",
+    ),
+    greetingScript: "Bonjour ! Ici Maude, l'assistante virtuelle de {company}. Comment je peux vous aider aujourd'hui ?",
+    closingScript: "Parfait, j'ai tout noté ! L'équipe vous revient très bientôt. Merci d'avoir appelé, bonne journée !",
+    style: "Phrases courtes et québécoises. Vouvoiement naturel — pas guindé. Réactions courtes et sincères (« Ah, je comprends ! », « OK, c'est beau »). Une seule question à la fois.",
+  },
 ];
