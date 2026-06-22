@@ -88,8 +88,9 @@ La fiche d'appel est visible immédiatement :
 | `TWILIO_AUTH_TOKEN` | Signature webhook + SMS | Oui (prod) |
 | `TWILIO_PHONE_NUMBER` | Numéro Twilio affiché | Oui |
 | `SCALY_REALTIME_WS_URL` | URL du pont realtime (`wss://…/twilio`) | Oui |
-| `SCALY_PUBLIC_URL` | URL publique app (signature Twilio) | Recommandé |
-| `REALTIME_SHARED_SECRET` | Sécurité pont ↔ app | Recommandé |
+| `SCALY_APP_URL` | URL interne de l'app Next.js (utilisée par le pont pour `/api/voice/context` et `/api/voice/complete`) | Oui (pont distant) |
+| `SCALY_PUBLIC_URL` | URL publique app (signature HMAC Twilio) | Recommandé |
+| `REALTIME_SHARED_SECRET` | Sécurité pont ↔ app (`/api/voice/context` + `/api/voice/complete` retournent 503 sans lui en prod) | **Requis (prod)** |
 | `DATABASE_URL` + `STORE_PROVIDER=prisma` | Persistance Postgres | Optionnel (mémoire sinon) |
 | `CLERK_SECRET_KEY` + `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Auth | Optionnel (dev ouvert sinon) |
 
@@ -151,6 +152,8 @@ Pour créer un profil Maude pour une vraie PME : `/onboarding` → coller l'URL 
 | **Relance saisonnière** | Opt-in exprès requis (ADR-015 palier 3) — non implémenté. |
 | **Multi-langue EN** | Scripts EN partiels (questions principales seulement). Scripts EN complets = P5. |
 | **Voix** | Champion : gpt-realtime (voix OpenAI). Voix fr-CA native (Polly Gabrielle) en A/B test (PR #11, ouverte). |
+| **Consentement live** | `consentFromCall()` extrait le consentement via `intelligence.collectedFields`. En appel live, ces champs sont inférés du transcript par rules-v1 (non garanti si la formulation sort du lexique connu). |
+| **Simulateur démo** | `/simulator` utilise `DEFAULT_COMPANY_ID` (Plomberie Bélair/Sophie). La démo Maude (`comp_maude`) n'est pas sélectionnable via l'URL publique en MVP. |
 
 ---
 

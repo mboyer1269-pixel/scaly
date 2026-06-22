@@ -31,7 +31,7 @@ const FEATURES = [
   {
     icon: MessageSquare,
     t: "SMS de suivi automatique",
-    d: "Chaque appel génère une fiche résumée envoyée à votre téléphone. Vous voyez en cinq secondes si c'est chaud, urgent ou spam.",
+    d: "Les urgences, appels manqués et transferts génèrent une fiche résumée envoyée à votre téléphone. Vous voyez en cinq secondes si c'est chaud, urgent ou spam.",
   },
   {
     icon: Zap,
@@ -51,7 +51,7 @@ const FEATURES = [
   {
     icon: ShieldCheck,
     t: "Conforme Loi 25 par conception",
-    d: "Divulgation IA à l'accueil, consentement de rappel capté, rétention configurable, suppression sur demande. Vérifiable dans votre tableau de bord.",
+    d: "Divulgation IA à l'accueil, rétention configurable, suppression sur demande. Consentement de rappel capté via le simulateur et les appels analysés. Vérifiable dans votre tableau de bord.",
   },
 ];
 
@@ -203,8 +203,8 @@ export default function AlloMaudePage() {
           <ShieldCheck className="mx-auto mb-3 text-emerald-400" size={28} />
           <h2 className="text-2xl font-bold">Conforme Loi 25 par conception</h2>
           <p className="mx-auto mt-3 max-w-xl text-sm text-ink-400">
-            Maude s'annonce comme IA dès l'accueil. Le consentement de rappel est capté et horodaté à chaque appel.
-            La rétention des verbatims est configurable. La suppression des données personnelles est possible sur demande.
+            Maude s'annonce comme IA dès l'accueil. La rétention des verbatims est configurable.
+            La suppression des données personnelles est possible sur demande.
             Tout est vérifiable dans votre tableau de bord — pas une promesse marketing, une fonctionnalité réelle.
           </p>
         </div>
