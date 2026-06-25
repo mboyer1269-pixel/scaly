@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 const CUSTOMER_FILES = [
   "src/app/page.tsx",
+  "src/app/allo-maude/page.tsx",
   "src/app/layout.tsx",
   "src/app/pricing/page.tsx",
   "src/components/Sidebar.tsx",
@@ -16,6 +17,8 @@ const CUSTOMER_FILES = [
   "src/components/AgentForm.tsx",
   "src/components/OnboardingWizard.tsx",
   "src/components/SettingsForm.tsx",
+  "src/components/AlloMaudeLanding.tsx",
+  "src/components/CoverageForm.tsx",
 ];
 
 function visibleScalyReferences(source: string): string[] {
