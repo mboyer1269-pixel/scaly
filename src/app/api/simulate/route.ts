@@ -9,7 +9,7 @@ import { resolveCompanyId } from "@/server/tenant";
 import { getPersonaById, PERSONAS } from "@/data/personas";
 import { getScriptById, getScriptByIndustry, INDUSTRY_SCRIPTS } from "@/data/industry-scripts";
 import { simulateCall } from "@/services/simulator";
-import { consentFromCall } from "@/services/consent";
+import { runSimulationWorkflow } from "@/services/simulation-workflow";
 import type { Industry } from "@/domain/company";
 import { clientKey, createRateLimiter, tooManyRequests } from "@/lib/rate-limit";
 
@@ -61,15 +61,12 @@ export async function POST(req: Request) {
   }
 
   const seed = Number.isFinite(body.seed) ? Math.abs(Math.floor(body.seed as number)) : Math.floor(Math.random() * 1_000_000);
-  const result = simulateCall({ company, script, persona, seed, agent });
-
-  if (body.persist !== false) {
-    await store.addCall(result.call, result.actions);
-    // Coffre de consentements (ADR-018) — le simulateur alimente le même
-    // registre que les appels réels : la démo montre la vraie mécanique.
-    const consent = consentFromCall(result.call);
-    if (consent) await store.saveConsent(consent);
+  const input = { company, script, persona, seed, agent };
+  if (body.persist === false) {
+    const result = simulateCall(input);
+    return NextResponse.json({ ...result, seed, persisted: false });
   }
 
-  return NextResponse.json({ ...result, seed, persisted: body.persist !== false });
+  const result = await runSimulationWorkflow(store, input);
+  return NextResponse.json({ ...result, seed, persisted: true });
 }
