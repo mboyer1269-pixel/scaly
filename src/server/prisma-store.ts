@@ -10,12 +10,16 @@ import type {
   Call as CallRow,
   Action as ActionRow,
   VoiceSession as VoiceSessionRow,
+  ReviewItem as ReviewItemRow,
+  ReadinessEvidence as ReadinessEvidenceRow,
 } from "@prisma/client";
 import type { Call, CallIntelligence, TranscriptTurn } from "@/domain/call";
 import type { VoiceFieldState, VoiceRuntimeEvent, VoiceRuntimeState, VoiceRuntimeTelemetry, VoiceSessionRecord, VoiceTurn } from "@/domain/voice";
 import type { AuditEntry, ScalyAction } from "@/domain/action";
-import type { BusinessHours, Company, CompliancePolicy, EscalationRule, FollowUpPreferences, LanguageCode } from "@/domain/company";
+import type { BusinessHours, Company, CompliancePolicy, CoveragePolicy, EscalationRule, FollowUpPreferences, LanguageCode } from "@/domain/company";
 import type { ConsentRecord } from "@/domain/consent";
+import type { ReadinessEvidence, ReadinessKind } from "@/domain/readiness";
+import type { ReviewItem, ReviewStatus } from "@/domain/review";
 import { canonicalPhone } from "@/domain/consent";
 import type { VoiceAgentConfig, VoiceProfile } from "@/domain/agent";
 import type { ComplianceAuditEntry, LiveCheck, ScalyRepository, StoreInfo } from "./store";
@@ -48,6 +52,7 @@ export function companyToDb(c: Company): Prisma.CompanyCreateInput {
     serviceAreas: c.serviceAreas,
     policies: c.policies,
     followUp: asJson(c.followUp),
+    coverage: c.coverage ? asJson(c.coverage) : Prisma.DbNull,
     compliance: asJson(c.compliance),
     planId: c.planId,
     billing: c.billing ? asJson(c.billing) : Prisma.DbNull,
@@ -76,6 +81,7 @@ export function companyFromDb(row: CompanyRow): Company {
     serviceAreas: row.serviceAreas,
     policies: row.policies,
     followUp: row.followUp as unknown as FollowUpPreferences,
+    coverage: row.coverage ? (row.coverage as unknown as CoveragePolicy) : undefined,
     compliance: row.compliance as unknown as CompliancePolicy,
     planId: row.planId as Company["planId"],
     billing: row.billing ? (row.billing as unknown as Company["billing"]) : undefined,
@@ -232,6 +238,35 @@ export function voiceSessionFromDb(row: VoiceSessionRow): VoiceSessionRecord {
     fields: row.fields as unknown as VoiceFieldState[],
     telemetry: row.telemetry as unknown as VoiceRuntimeTelemetry,
     callId: row.callId ?? undefined,
+  };
+}
+
+export function reviewItemFromDb(row: ReviewItemRow): ReviewItem {
+  return {
+    id: row.id,
+    companyId: row.companyId,
+    callId: row.callId,
+    reason: row.reason as ReviewItem["reason"],
+    evidence: row.evidence,
+    status: row.status as ReviewStatus,
+    resolution: row.resolution ?? undefined,
+    createdAt: row.createdAt.toISOString(),
+    resolvedAt: row.resolvedAt?.toISOString(),
+  };
+}
+
+export function readinessEvidenceFromDb(row: ReadinessEvidenceRow): ReadinessEvidence {
+  return {
+    id: row.id,
+    companyId: row.companyId,
+    kind: row.kind as ReadinessKind,
+    status: row.status as ReadinessEvidence["status"],
+    label: row.label,
+    detail: row.detail,
+    callId: row.callId ?? undefined,
+    externalId: row.externalId ?? undefined,
+    verifiedAt: row.verifiedAt?.toISOString(),
+    createdAt: row.createdAt.toISOString(),
   };
 }
 
@@ -451,6 +486,76 @@ export class PrismaStore implements ScalyRepository {
   async getVoiceSession(id: string): Promise<VoiceSessionRecord | undefined> {
     const row = await prisma.voiceSession.findUnique({ where: { id } });
     return row ? voiceSessionFromDb(row) : undefined;
+  }
+
+  async listReviewItems(companyId: string, status?: ReviewStatus): Promise<ReviewItem[]> {
+    const rows = await prisma.reviewItem.findMany({
+      where: { companyId, ...(status ? { status } : {}) },
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map(reviewItemFromDb);
+  }
+
+  async saveReviewItem(item: ReviewItem): Promise<ReviewItem> {
+    const data = {
+      id: item.id,
+      companyId: item.companyId,
+      callId: item.callId,
+      reason: item.reason,
+      evidence: item.evidence,
+      status: item.status,
+      resolution: item.resolution ?? null,
+      createdAt: new Date(item.createdAt),
+      resolvedAt: item.resolvedAt ? new Date(item.resolvedAt) : null,
+    };
+    await prisma.reviewItem.upsert({ where: { id: item.id }, create: data, update: data });
+    return item;
+  }
+
+  async resolveReviewItem(
+    id: string,
+    resolution: string,
+    status: "resolved" | "ignored" = "resolved",
+    now = new Date(),
+  ): Promise<ReviewItem | undefined> {
+    const existing = await prisma.reviewItem.findUnique({ where: { id } });
+    if (!existing) return undefined;
+    const row = await prisma.reviewItem.update({
+      where: { id },
+      data: { status, resolution, resolvedAt: now },
+    });
+    await this.recordAudit({
+      companyId: row.companyId,
+      actor: "ui",
+      event: "revision_résolue",
+      detail: `${row.id}: ${resolution}`,
+    });
+    return reviewItemFromDb(row);
+  }
+
+  async listReadinessEvidence(companyId: string, kind?: ReadinessKind): Promise<ReadinessEvidence[]> {
+    const rows = await prisma.readinessEvidence.findMany({
+      where: { companyId, ...(kind ? { kind } : {}) },
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map(readinessEvidenceFromDb);
+  }
+
+  async saveReadinessEvidence(evidence: ReadinessEvidence): Promise<ReadinessEvidence> {
+    const data = {
+      id: evidence.id,
+      companyId: evidence.companyId,
+      kind: evidence.kind,
+      status: evidence.status,
+      label: evidence.label,
+      detail: evidence.detail,
+      callId: evidence.callId ?? null,
+      externalId: evidence.externalId ?? null,
+      verifiedAt: evidence.verifiedAt ? new Date(evidence.verifiedAt) : null,
+      createdAt: new Date(evidence.createdAt),
+    };
+    await prisma.readinessEvidence.upsert({ where: { id: evidence.id }, create: data, update: data });
+    return evidence;
   }
 
   async purgeExpiredTranscripts(now = new Date()): Promise<{ purged: number; voicePurged: number }> {

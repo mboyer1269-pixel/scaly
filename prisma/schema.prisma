@@ -35,6 +35,7 @@ model Company {
   serviceAreas    String[]
   policies        String[]
   followUp        Json
+  coverage        Json?
   compliance      Json
   planId          String
   billing         Json?    // CompanyBilling — écrit par le webhook Stripe uniquement
@@ -46,6 +47,8 @@ model Company {
   audits   AuditLog[]
   usage    UsagePeriod[]
   consents Consent[]
+  reviewItems ReviewItem[]
+  readinessEvidence ReadinessEvidence[]
 }
 
 // Coffre de consentements (ADR-018) — par personne, opposable, révocable.
@@ -179,4 +182,39 @@ model UsagePeriod {
   company Company @relation(fields: [companyId], references: [id])
 
   @@unique([companyId, periodLabel])
+}
+
+model ReviewItem {
+  id         String   @id
+  companyId  String
+  callId     String
+  reason     String
+  evidence   String
+  status     String
+  resolution String?
+  createdAt  DateTime
+  resolvedAt DateTime?
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@index([companyId, status, createdAt])
+  @@index([callId])
+}
+
+model ReadinessEvidence {
+  id         String   @id
+  companyId  String
+  kind       String
+  status     String
+  label      String
+  detail     String
+  callId     String?
+  externalId String?
+  verifiedAt DateTime?
+  createdAt  DateTime
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@index([companyId, kind, createdAt])
+  @@index([callId])
 }
