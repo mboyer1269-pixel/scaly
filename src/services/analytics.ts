@@ -24,8 +24,14 @@ function dayKey(iso: string): string {
   return iso.slice(0, 10);
 }
 
-export function computeDashboard(company: Company, calls: Call[], actions: ScalyAction[], periodDays = 14): DashboardData {
-  const since = Date.now() - periodDays * 24 * 3600 * 1000;
+export function computeDashboard(
+  company: Company,
+  calls: Call[],
+  actions: ScalyAction[],
+  periodDays = 14,
+  now = new Date(),
+): DashboardData {
+  const since = now.getTime() - periodDays * 24 * 3600 * 1000;
   const inPeriod = calls.filter((c) => new Date(c.startedAt).getTime() >= since);
   const baseline = getScriptByIndustry(company.industry).valueBaselineCad;
 
@@ -47,7 +53,7 @@ export function computeDashboard(company: Company, calls: Call[], actions: Scaly
 
   const byDay: DayBucket[] = [];
   for (let i = periodDays - 1; i >= 0; i--) {
-    const d = new Date(Date.now() - i * 24 * 3600 * 1000);
+    const d = new Date(now.getTime() - i * 24 * 3600 * 1000);
     const key = d.toISOString().slice(0, 10);
     const dayCalls = inPeriod.filter((c) => dayKey(c.startedAt) === key);
     byDay.push({ date: key, total: dayCalls.length, missed: dayCalls.filter((c) => c.status === "missed").length });

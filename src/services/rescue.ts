@@ -76,9 +76,9 @@ export function computeRescueQueue(company: Company, calls: Call[], actions: Sca
 }
 
 /** Le ROI en une phrase, calculé des mêmes agrégats que le dashboard. */
-export function computeRoiSnapshot(company: Company, d: DashboardData, calls: Call[]): RoiSnapshot {
+export function computeRoiSnapshot(company: Company, d: DashboardData, calls: Call[], now = new Date()): RoiSnapshot {
   const planPriceCad = PLANS[company.planId].priceMonthlyCad;
-  const since = Date.now() - d.periodDays * 24 * 3600 * 1000;
+  const since = now.getTime() - d.periodDays * 24 * 3600 * 1000;
   const inPeriod = calls.filter((c) => new Date(c.startedAt).getTime() >= since);
   const enCallsCount = inPeriod.filter((c) => c.language === "en" && c.status !== "missed").length;
   const atRiskCount = inPeriod.filter((c) => RESCUABLE_STATUSES.has(c.status) && !c.intelligence?.saved).length;
