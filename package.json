@@ -17,6 +17,7 @@
     "db:purge": "tsx scripts/purge.ts",
     "eval:golden": "tsx scripts/eval-golden.ts",
     "pilot:check": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import=tsx scripts/pilot-check.ts",
+    "demo:check": "node --import=tsx scripts/demo-check.ts",
     "realtime": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import=tsx realtime/server.ts"
   },
   "prisma": {
