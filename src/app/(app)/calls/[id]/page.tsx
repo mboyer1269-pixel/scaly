@@ -13,6 +13,8 @@ import { ACTION_TYPE_LABELS } from "@/domain/action";
 import { FIELD_LABELS, type FieldKey } from "@/domain/script";
 import { formatCad, formatDateTime, formatDuration } from "@/lib/format";
 import { AnalyzeButton } from "@/components/AnalyzeButton";
+import { deriveCallReality } from "@/services/reality";
+import { RealityBadge } from "@/components/RealityBadge";
 
 export const dynamic = "force-dynamic";
 
@@ -26,6 +28,8 @@ export default async function CallDetailPage({ params }: { params: { id: string 
   const u = urgencyBadge(intel?.urgency);
   const l = leadBadge(intel?.leadQuality);
   const s = callStatusBadge(call.status);
+  const evidence = (await store.listReadinessEvidence(call.companyId)).find((item) => item.callId === call.id);
+  const reality = deriveCallReality(call, store.info(), evidence);
 
   return (
     <>
@@ -40,6 +44,7 @@ export default async function CallDetailPage({ params }: { params: { id: string 
           <Badge tone={s.tone}>{s.label}</Badge>
           <Badge tone={u.tone}>Urgence : {u.label}</Badge>
           <Badge tone={l.tone}>Lead : {l.label}</Badge>
+          <RealityBadge reality={reality} />
           {intel?.saved && <Badge tone="emerald">Appel sauvé ({intel.saved.reason === "hors_heures" ? "hors heures" : "rappel SMS"})</Badge>}
         </div>
       </PageHeader>
@@ -58,7 +63,7 @@ export default async function CallDetailPage({ params }: { params: { id: string 
                     t.speaker === "agent" ? "rounded-tl-sm bg-scaly-50 text-ink-800 ring-1 ring-scaly-100" : "rounded-tr-sm bg-ink-100 text-ink-800",
                   )}>
                     <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
-                      {t.speaker === "agent" ? "Agent Scaly" : "Appelant"} · {Math.round(t.atMs / 1000)} s{t.lang === "en" ? " · EN" : ""}
+                      {t.speaker === "agent" ? "Maude" : "Appelant"} · {Math.round(t.atMs / 1000)} s{t.lang === "en" ? " · EN" : ""}
                     </p>
                     {t.text}
                   </div>
@@ -105,7 +110,7 @@ export default async function CallDetailPage({ params }: { params: { id: string 
 
         <div className="space-y-6 lg:col-span-2">
           <Card
-            title="Call Intelligence"
+            title="Ce que Maude a compris"
             action={
               <span className="inline-flex items-center gap-2">
                 <Badge tone="violet">moteur {intel?.engine ?? "—"}</Badge>

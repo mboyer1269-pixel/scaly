@@ -96,7 +96,7 @@ export function OnboardingWizard() {
     return (
       <div className="grid gap-6 lg:grid-cols-2">
         <div className="lg:col-span-2">
-          <Card title="Ce que Scaly a compris" subtitle={`brouillon généré à partir de ${url}${sourceChars ? ` (${sourceChars} caractères analysés)` : ""} — corrigez tout ce qui cloche avant d'approuver`}>
+          <Card title="Ce que Maude a compris" subtitle={`brouillon généré à partir de ${url}${sourceChars ? ` (${sourceChars} caractères analysés)` : ""} — corrigez tout ce qui cloche avant d'approuver`}>
             <p className="text-sm text-ink-700">{draft.understanding}</p>
           </Card>
         </div>
@@ -181,7 +181,7 @@ export function OnboardingWizard() {
 
   return (
     <div className="max-w-2xl">
-      <Card title="Votre site + deux phrases" subtitle="Scaly lit votre site et prépare un brouillon de profil — vous gardez le dernier mot">
+      <Card title="Votre site + deux phrases" subtitle="Maude lit votre site et prépare un brouillon de profil — vous gardez le dernier mot">
         <div className="space-y-4">
           <div>
             <span className={label}>Adresse de votre site web</span>

@@ -34,7 +34,10 @@ export default async function DashboardPage() {
   const store = getStore();
   const company = (await resolveCompany())!;
   const calls = await store.listCalls(company.id);
-  const actions = await store.listActions(company.id);
+  const [actions, reviews] = await Promise.all([
+    store.listActions(company.id),
+    store.listReviewItems(company.id, "open"),
+  ]);
   const d = computeDashboard(company, calls, actions);
   const roi = computeRoiSnapshot(company, d, calls);
   const rescue = computeRescueQueue(company, calls, actions).slice(0, 5);
@@ -58,11 +61,11 @@ export default async function DashboardPage() {
 
       {/* === La réponse en 60 secondes : l'argent, puis les appels à sauver === */}
       <div className="mb-6 grid gap-6 lg:grid-cols-5">
-        <Card title="Ce que Scaly vous rapporte" subtitle={`${roi.periodDays} derniers jours · estimations par barème d'industrie, recalibrées par client`} className="lg:col-span-2">
+        <Card title="Ce que Maude a protégé" subtitle={`${roi.periodDays} derniers jours · estimations par barème d'industrie, recalibrées par client`} className="lg:col-span-2">
           <p className="text-3xl font-black text-emerald-600">{formatCad(roi.protectedCad)}</p>
           <p className="mt-1 text-sm leading-relaxed text-ink-600">
             protégés sur <span className="font-semibold text-ink-900">{roi.wouldBeLostCount} appel{roi.wouldBeLostCount > 1 ? "s" : ""}</span> qui
-            auraient été perdus sans Scaly{roi.multiple !== null && roi.multiple > 0 && (
+            auraient probablement été perdus sans réponse{roi.multiple !== null && roi.multiple > 0 && (
               <> — <span className="font-bold text-ink-900">{String(roi.multiple).replace(".", ",")}×</span> le prix de votre plan ({formatCad(roi.planPriceCad)}/mois)</>
             )}.
           </p>
@@ -90,7 +93,7 @@ export default async function DashboardPage() {
         >
           {rescue.length === 0 && (
             <div className="flex items-center gap-2 py-4 text-sm text-emerald-700">
-              <PhoneMissed size={16} /> Aucun appel à sauver — tout est répondu ou récupéré. C'est exactement le travail de Scaly.
+              <PhoneMissed size={16} /> Aucun appel à sauver — tout est répondu ou récupéré.
             </div>
           )}
           <ul className="space-y-2">
@@ -129,6 +132,17 @@ export default async function DashboardPage() {
         <Stat label="Pipeline ouvert" value={formatCad(d.pipelineValueCad)} sub="leads chauds + tièdes à suivre" />
         <Stat label="Urgences ouvertes" value={String(d.urgentOpen)} sub="à rappeler en priorité" tone={d.urgentOpen > 0 ? "rose" : "emerald"} />
       </div>
+
+      {reviews.length > 0 && (
+        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-900">
+            {reviews.length} correction{reviews.length > 1 ? "s" : ""} à vérifier
+          </p>
+          <p className="mt-0.5 text-xs text-amber-800">
+            Ces éléments viennent d'appels inspectables. <Link href="/learn" className="font-semibold underline">Ouvrir À améliorer</Link>
+          </p>
+        </div>
+      )}
 
       <div className="mt-6 grid gap-6 lg:grid-cols-3">
         <Card title="Volume d'appels" subtitle="par jour — les barres roses sont les appels manqués" className="lg:col-span-2">

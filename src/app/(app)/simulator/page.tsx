@@ -8,8 +8,8 @@ export default function SimulatorPage() {
   return (
     <>
       <PageHeader
-        title="Simulateur d'appel"
-        subtitle="Choisis une industrie et un type d'appelant, lance l'appel, observe la qualification, l'analyse et les actions. Même seed = même conversation (déterministe)."
+        title="Démo intégrée"
+        subtitle="Ce scénario utilise les mêmes services, le même repository et les mêmes pages que l'application normale."
       />
       <SimulatorClient />
     </>

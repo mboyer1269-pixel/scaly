@@ -101,7 +101,7 @@ export function AgentForm({ agent, companyName }: { agent: VoiceAgentConfig; com
         </div>
       </Card>
 
-      <Card title="Règles de sécurité" subtitle="non modifiables — appliquées à tous les agents Scaly">
+      <Card title="Règles de sécurité" subtitle="non modifiables — appliquées à Maude pendant tous les appels">
         <ul className="space-y-2">
           {agent.safetyRules.map((r, i) => (
             <li key={i} className="rounded-lg border border-ink-100 bg-ink-50/50 px-3 py-2 text-xs text-ink-700">{r}</li>

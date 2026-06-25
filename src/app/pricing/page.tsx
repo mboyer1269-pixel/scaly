@@ -8,7 +8,7 @@ import { ShieldCheck } from "lucide-react";
 import { ADD_ONS } from "@/domain/billing";
 import { PricingPlans } from "@/components/PricingPlans";
 
-export const metadata = { title: "Prix — Scaly" };
+export const metadata = { title: "Prix — Allô Maude" };
 
 const ENGAGEMENTS = [
   {
@@ -38,8 +38,8 @@ export default function PricingPage() {
     <div className="min-h-screen bg-ink-950 text-white">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
         <Link href="/" className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-scaly-500 text-sm font-black">S</span>
-          <span className="text-lg font-bold">Scaly</span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-sm font-black text-ink-950">M</span>
+          <span className="text-lg font-bold">Allô Maude</span>
         </Link>
         <Link href="/dashboard" className="rounded-lg bg-white/10 px-4 py-2 text-sm font-medium hover:bg-white/20">
           Ouvrir le dashboard démo
@@ -92,7 +92,7 @@ export default function PricingPage() {
       </section>
 
       <footer className="border-t border-ink-800 px-6 py-8 text-center text-xs text-ink-500">
-        Scaly — plateforme en construction. Démo honnête : aucun chiffre de marché inventé, aucune intégration prétendue.
+        Allô Maude — prix publics en dollars canadiens. Les intégrations non configurées restent identifiées.
       </footer>
     </div>
   );

@@ -190,7 +190,7 @@ export function SimulatorClient() {
                   t.speaker === "agent" ? "rounded-tl-sm bg-scaly-50 text-ink-800 ring-1 ring-scaly-100" : "rounded-tr-sm bg-ink-100 text-ink-800",
                 )}>
                   <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
-                    {t.speaker === "agent" ? "Agent Scaly" : "Appelant"}{t.lang === "en" ? " · EN" : ""}
+                    {t.speaker === "agent" ? "Maude" : "Appelant"}{t.lang === "en" ? " · EN" : ""}
                   </p>
                   {t.text}
                 </div>

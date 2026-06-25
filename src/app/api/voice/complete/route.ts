@@ -98,7 +98,7 @@ export async function POST(req: Request) {
     try {
       await sendSms(
         company.transferPhone,
-        `Scaly — transfert en cours : ${who}. ${i?.summary ?? "Résumé indisponible."} Rappel : ${call.fromNumber}.`,
+        `Allô Maude — transfert en cours : ${who}. ${i?.summary ?? "Résumé indisponible."} Rappel : ${call.fromNumber}.`,
       );
       await store.recordAudit({ companyId: company.id, actor: "scaly-realtime", event: "contexte_transfert_envoyé", detail: `SMS à ${company.transferPhone} pour ${call.id}` });
     } catch {

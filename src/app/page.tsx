@@ -4,10 +4,10 @@ import { ArrowRight, CalendarCheck, PhoneCall, Sparkles, TrendingUp } from "luci
 import { INDUSTRY_LABELS } from "@/domain/company";
 
 const STEPS = [
-  { n: "1", t: "Scaly répond", d: "Chaque appel entrant est pris en charge en français québécois ou en anglais, 24/7, avec la personnalité de votre entreprise." },
-  { n: "2", t: "Scaly qualifie", d: "Intention, urgence, informations essentielles, valeur potentielle : tout est capté selon le script de votre industrie." },
-  { n: "3", t: "Scaly agit", d: "Tâches, rendez-vous, SMS de confirmation, lead CRM, alerte urgence au propriétaire : les suivis partent tout seuls." },
-  { n: "4", t: "Vous encaissez", d: "Le tableau de bord montre les appels sauvés, les opportunités chaudes et la valeur que Scaly protège." },
+  { n: "1", t: "Maude répond", d: "Chaque appel entrant est pris en charge en français québécois ou en anglais, 24/7, avec la personnalité de votre entreprise." },
+  { n: "2", t: "Maude qualifie", d: "Intention, urgence, informations essentielles, valeur potentielle : tout est capté selon le script de votre industrie." },
+  { n: "3", t: "Maude prépare la suite", d: "Tâches, demandes de rendez-vous, SMS et alertes sont créés avec une preuve inspectable." },
+  { n: "4", t: "Vous décidez", d: "La vue d'ensemble montre les appels sauvés, les opportunités chaudes et la valeur que Maude a protégée." },
 ];
 
 export default function HomePage() {
@@ -15,8 +15,8 @@ export default function HomePage() {
     <div className="min-h-screen bg-ink-950 text-white">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
         <div className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-scaly-500 text-sm font-black">S</span>
-          <span className="text-lg font-bold">Scaly</span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-sm font-black text-ink-950">M</span>
+          <span className="text-lg font-bold">Allô Maude</span>
         </div>
         <div className="flex items-center gap-2">
           <Link href="/pricing" className="rounded-lg px-4 py-2 text-sm font-medium text-ink-200 hover:bg-white/10">
@@ -36,7 +36,7 @@ export default function HomePage() {
           Un appel manqué, c'est un client qui appelle ton concurrent.
         </h1>
         <p className="mx-auto mt-5 max-w-2xl text-lg text-ink-300">
-          Scaly répond à chaque appel, qualifie la demande, prend les informations, déclenche les suivis
+          Allô Maude répond à chaque appel, qualifie la demande, prend les informations, prépare les suivis
           et te montre combien d'argent vient d'être sauvé. En français québécois comme en anglais.
         </p>
         <div className="mt-8 flex flex-wrap justify-center gap-3">
@@ -101,7 +101,7 @@ export default function HomePage() {
 
       <section className="mx-auto max-w-6xl px-6 py-16 text-center">
         <CalendarCheck className="mx-auto mb-4 text-scaly-400" size={28} />
-        <h2 className="text-2xl font-bold">Voir Scaly travailler sur VOS appels ?</h2>
+        <h2 className="text-2xl font-bold">Voir Maude traiter un appel de bout en bout ?</h2>
         <p className="mx-auto mt-3 max-w-xl text-sm text-ink-400">
           Lance une simulation avec le script de ton industrie et un type d'appelant réaliste — urgence, magasineur, client frustré — et regarde le pipeline se remplir.
         </p>
@@ -119,7 +119,7 @@ export default function HomePage() {
       </section>
 
       <footer className="border-t border-ink-800 px-6 py-8 text-center text-xs text-ink-500">
-        Scaly — plateforme en construction. Démo honnête : aucun chiffre de marché inventé, aucune intégration prétendue.
+        Allô Maude — démonstration contrôlée. Chaque simulation, dépendance absente et intégration non vérifiée est identifiée.
       </footer>
     </div>
   );

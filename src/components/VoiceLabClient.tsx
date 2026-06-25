@@ -325,7 +325,7 @@ export function VoiceLabClient() {
                         )}
                       >
                         <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
-                          {turn.speaker === "agent" ? "Agente Scaly" : "Appelant"} · {clock(turn.atMs)}
+                          {turn.speaker === "agent" ? "Maude" : "Appelant"} · {clock(turn.atMs)}
                           {turn.lang === "en" ? " · EN" : ""}
                           {turn.interrupted ? " · COUPÉE" : ""}
                         </p>

@@ -1,4 +1,4 @@
-/** File d'actions — tout ce que Scaly a déclenché, avec audit trail complet. */
+/** File d'actions — tout ce que Maude a préparé, avec audit complet. */
 import Link from "next/link";
 import { getStore } from "@/server/store";
 import { resolveCompanyId } from "@/server/tenant";

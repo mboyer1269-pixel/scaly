@@ -6,33 +6,28 @@ import clsx from "clsx";
 import {
   Activity,
   Bot,
-  FileText,
   LayoutDashboard,
-  Mic,
+  Lightbulb,
   Phone,
   PlayCircle,
-  Plug,
+  Rocket,
   Settings,
-  Shield,
-  ShieldCheck,
   Sparkles,
   Zap,
 } from "lucide-react";
 
 const NAV = [
-  { href: "/dashboard", label: "Tableau de bord", icon: LayoutDashboard },
+  { href: "/dashboard", label: "Vue d'ensemble", icon: LayoutDashboard },
   { href: "/calls", label: "Appels", icon: Phone },
-  { href: "/simulator", label: "Simulateur", icon: PlayCircle },
-  { href: "/voice-lab", label: "Voice Lab", icon: Mic },
-  { href: "/scripts", label: "Scripts d'industrie", icon: FileText },
-  { href: "/actions", label: "Actions", icon: Zap },
-  { href: "/integrations", label: "Intégrations", icon: Plug },
-  { href: "/agent", label: "Agent vocal", icon: Bot },
-  { href: "/onboarding", label: "Onboarding magique", icon: Sparkles },
-  { href: "/consents", label: "Consentements", icon: ShieldCheck },
-  { href: "/settings", label: "Entreprise", icon: Settings },
-  { href: "/admin", label: "Admin (fondateur)", icon: Shield },
-  { href: "/status", label: "Statut système", icon: Activity },
+  { href: "/follow-up", label: "À suivre", icon: Zap },
+  { href: "/prepare", label: "Préparer Maude", icon: Sparkles },
+  { href: "/learn", label: "À améliorer", icon: Lightbulb },
+  { href: "/settings", label: "Réglages", icon: Settings },
+  { href: "/simulator", label: "Démo intégrée", icon: PlayCircle },
+  { href: "/readiness/demo", label: "Préparation démo", icon: Rocket },
+  { href: "/readiness/live", label: "Appels réels", icon: Phone },
+  { href: "/status", label: "Statut technique", icon: Activity },
+  { href: "/agent", label: "Voix de Maude", icon: Bot },
 ];
 
 export function Sidebar({ storeProvider = "memory" }: { storeProvider?: "memory" | "prisma" }) {
@@ -40,8 +35,8 @@ export function Sidebar({ storeProvider = "memory" }: { storeProvider?: "memory"
   return (
     <aside className="flex w-60 shrink-0 flex-col border-r border-ink-800 bg-ink-950 text-ink-100">
       <Link href="/" className="flex items-center gap-2 px-5 py-5">
-        <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-scaly-500 text-sm font-black text-white">S</span>
-        <span className="text-lg font-bold tracking-tight text-white">Scaly</span>
+        <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-sm font-black text-ink-950">M</span>
+        <span className="text-lg font-bold tracking-tight text-white">Allô Maude</span>
       </Link>
       {storeProvider === "prisma" ? (
         <p className="mx-4 mb-3 rounded-md bg-emerald-500/15 px-2 py-1 text-center text-[11px] font-medium text-emerald-300">
@@ -73,7 +68,7 @@ export function Sidebar({ storeProvider = "memory" }: { storeProvider?: "memory"
       <div className="border-t border-ink-800 px-5 py-4 text-[11px] leading-relaxed text-ink-400">
         Plomberie Bélair (tenant démo)
         <br />
-        Moteur d'analyse : rules-v1
+        Moteur technique : Scaly · rules-v1
       </div>
     </aside>
   );

@@ -6,6 +6,8 @@ import { Badge, Card, EmptyState, PageHeader } from "@/components/ui";
 import { callStatusBadge, leadBadge, urgencyBadge } from "@/lib/labels";
 import { INTENT_LABELS } from "@/domain/call";
 import { formatCad, formatDateTime, formatDuration } from "@/lib/format";
+import { deriveCallReality } from "@/services/reality";
+import { RealityBadge } from "@/components/RealityBadge";
 
 export const dynamic = "force-dynamic";
 
@@ -89,6 +91,7 @@ export default async function CallsPage({ searchParams }: { searchParams: Search
                 <th className="py-2 pr-3 font-medium">Lead</th>
                 <th className="py-2 pr-3 font-medium">Valeur</th>
                 <th className="py-2 pr-3 font-medium">Score</th>
+                <th className="py-2 pr-3 font-medium">Preuve</th>
                 <th className="py-2 font-medium">Statut</th>
               </tr>
             </thead>
@@ -97,6 +100,7 @@ export default async function CallsPage({ searchParams }: { searchParams: Search
                 const u = urgencyBadge(c.intelligence?.urgency);
                 const l = leadBadge(c.intelligence?.leadQuality);
                 const s = callStatusBadge(c.status);
+                const reality = deriveCallReality(c, store.info());
                 return (
                   <tr key={c.id} className="border-b border-ink-50 last:border-0 hover:bg-ink-50/60">
                     <td className="py-2.5 pr-3 text-ink-500"><Link href={`/calls/${c.id}`} className="hover:underline">{formatDateTime(c.startedAt)}</Link></td>
@@ -108,6 +112,7 @@ export default async function CallsPage({ searchParams }: { searchParams: Search
                     <td className="py-2.5 pr-3"><Badge tone={l.tone}>{l.label}</Badge></td>
                     <td className="py-2.5 pr-3 font-semibold">{c.intelligence?.estimatedValueCad ? formatCad(c.intelligence.estimatedValueCad) : "—"}</td>
                     <td className="py-2.5 pr-3 text-ink-600">{c.intelligence?.commercialScore ?? "—"}</td>
+                    <td className="py-2.5 pr-3"><RealityBadge reality={reality} /></td>
                     <td className="py-2.5"><Badge tone={s.tone}>{s.label}</Badge></td>
                   </tr>
                 );
