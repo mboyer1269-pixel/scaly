@@ -79,7 +79,7 @@ async function main(): Promise<void> {
   const report = evaluatePilotReadiness(env, facts);
 
   console.log("\n══════════════════════════════════════════════════════════════");
-  console.log("  SCALY — PILOT READINESS GATE");
+  console.log("  ALLÔ MAUDE — LIVE-CALL READINESS GATE");
   console.log("══════════════════════════════════════════════════════════════\n");
   console.log(`  VERDICT : ${ICON[report.verdict]} ${TAG[report.verdict]}`);
   console.log(`  Premier appel réel aujourd'hui : ${report.canMakeRealCall.possible ? "OUI" : "NON"} (${report.canMakeRealCall.mode})`);

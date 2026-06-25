@@ -5,6 +5,7 @@
   "description": "Scaly — plateforme de réceptionniste vocale IA pour PME francophones et bilingues",
   "scripts": {
     "dev": "next dev",
+    "app:local": "node --import=tsx scripts/app-local.ts",
     "build": "next build",
     "start": "next start",
     "test": "vitest run",
