@@ -7,20 +7,26 @@
  */
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Loader2, Phone, RotateCcw } from "lucide-react";
+import { ArrowRight, Loader2, Phone, RotateCcw } from "lucide-react";
 import clsx from "clsx";
 import { INDUSTRY_SCRIPTS } from "@/data/industry-scripts";
 import { PERSONAS } from "@/data/personas";
 import { INDUSTRY_LABELS, type Industry } from "@/domain/company";
 import { INTENT_LABELS, NEXT_ACTION_LABELS, type Call } from "@/domain/call";
 import type { ScalyAction } from "@/domain/action";
+import type { ReviewItem } from "@/domain/review";
+import type { RealityLabel } from "@/domain/readiness";
 import { Badge, Card, HonestyNote } from "@/components/ui";
+import { RealityBadge } from "@/components/RealityBadge";
 import { actionStatusBadge, leadBadge, urgencyBadge } from "@/lib/labels";
 import { formatCad } from "@/lib/format";
 
 interface SimResponse {
   call: Call;
   actions: ScalyAction[];
+  reviewItems: ReviewItem[];
+  reality: RealityLabel;
+  auditRecorded: boolean;
   seed: number;
   persisted: boolean;
   error?: string;
@@ -137,7 +143,7 @@ export function SimulatorClient() {
         </Card>
 
         {intel && fullyRevealed && (
-          <Card title="Analyse de l'appel" action={<Badge tone="violet">moteur {intel.engine}</Badge>}>
+          <Card title="Analyse de l'appel" action={result ? <RealityBadge reality={result.reality} /> : <Badge tone="violet">moteur {intel.engine}</Badge>}>
             <div className="space-y-3 text-sm">
               <p className="rounded-lg bg-ink-50 px-3 py-2 leading-relaxed text-ink-800">{intel.summary}</p>
               <div className="flex flex-wrap gap-1.5">
@@ -164,7 +170,29 @@ export function SimulatorClient() {
                   </ul>
                 </div>
               )}
-              <HonestyNote>Conversation générée par moteur de règles déterministe — pas un LLM. Objectif : valider scripts, escalades et actions avant la voix réelle (P2).</HonestyNote>
+              {result && (
+                <div className="rounded-xl border border-ink-200 bg-ink-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Preuves persistées</p>
+                  <p className="mt-1 text-sm text-ink-800">
+                    1 appel · {result.actions.length} action(s) · {result.reviewItems.length} élément(s) à réviser · audit {result.auditRecorded ? "enregistré" : "absent"}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link href={`/calls/${result.call.id}`} className="inline-flex items-center gap-1 rounded-lg bg-ink-900 px-3 py-2 text-xs font-semibold text-white">
+                      Ouvrir l'appel <ArrowRight size={13} />
+                    </Link>
+                    <Link href="/follow-up" className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-3 py-2 text-xs font-semibold text-ink-700">
+                      Voir les suivis
+                    </Link>
+                    <Link href="/learn" className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-3 py-2 text-xs font-semibold text-ink-700">
+                      Corriger les incertitudes
+                    </Link>
+                    <Link href="/readiness/demo" className="inline-flex items-center gap-1 rounded-lg border border-ink-200 bg-white px-3 py-2 text-xs font-semibold text-ink-700">
+                      Vérifier la démo
+                    </Link>
+                  </div>
+                </div>
+              )}
+              <HonestyNote>Conversation générée par un moteur de règles déterministe. Elle prouve le workflow applicatif, pas une connexion téléphonique réelle.</HonestyNote>
             </div>
           </Card>
         )}

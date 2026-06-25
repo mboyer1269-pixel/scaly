@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
 import { resolveCompanyId } from "@/server/tenant";
 import type { Company } from "@/domain/company";
+import { normalizeCoveragePolicy } from "@/services/coverage";
 
 export const dynamic = "force-dynamic";
 
@@ -23,6 +24,16 @@ export async function PUT(req: Request) {
   delete (patch as Record<string, unknown>).id;
   delete (patch as Record<string, unknown>).planId;
   delete (patch as Record<string, unknown>).billing;
+  if (patch.coverage) {
+    try {
+      patch.coverage = normalizeCoveragePolicy(patch.coverage);
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Politique de couverture invalide" },
+        { status: 400 },
+      );
+    }
+  }
   const company = await getStore().updateCompany(resolveCompanyId(), patch);
   if (!company) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   return NextResponse.json({ company });

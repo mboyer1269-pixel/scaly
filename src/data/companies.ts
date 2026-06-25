@@ -248,7 +248,7 @@ function agentFor(companyId: string, displayName: string, scriptId: string, pers
 }
 
 export const SEED_AGENTS: VoiceAgentConfig[] = [
-  agentFor(DEFAULT_COMPANY_ID, "Sophie", "script_domicile", "Chaleureuse, efficace, rassurante. Garde son calme dans les urgences et donne des consignes de sécurité simples."),
+  agentFor(DEFAULT_COMPANY_ID, "Maude", "script_domicile", "Chaleureuse, efficace, rassurante. Garde son calme dans les urgences et donne des consignes de sécurité simples."),
   agentFor("comp_rivnord", "Marc", "script_construction", "Posé et concret. Parle chantier sans jargon inutile."),
   agentFor("comp_mecanoplus", "Léa", "script_garage", "Énergique et directe. Vocabulaire auto simple."),
   agentFor("comp_sourire", "Camille", "script_dentiste", "Douce et patiente. Rassure les patients anxieux."),
