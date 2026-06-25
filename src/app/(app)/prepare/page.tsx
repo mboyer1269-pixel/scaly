@@ -40,7 +40,7 @@ export default async function PreparePage() {
       <div className="space-y-6">
         <Card
           title="Mode de couverture"
-          subtitle="Cette politique est persistée avec l'entreprise et partagée par l'application et la démo."
+          subtitle="Cette politique est persistée avec l'entreprise. Son routage téléphonique externe reste à configurer et à vérifier."
         >
           <CoverageForm coverage={company.coverage} />
         </Card>

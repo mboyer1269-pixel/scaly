@@ -36,7 +36,7 @@ Résultat relu dans le navigateur :
 - Overview mis à jour;
 - preuve présente dans Préparation démo.
 
-La sauvegarde de la politique de couverture a également été exécutée depuis `/prepare`.
+La sauvegarde de la politique de couverture a également été exécutée depuis `/prepare`. Cette preuve couvre la persistance de la configuration, pas un routage téléphonique externe.
 
 ## Commandes exécutées
 

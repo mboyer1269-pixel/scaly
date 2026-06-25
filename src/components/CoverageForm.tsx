@@ -51,7 +51,7 @@ export function CoverageForm({ coverage }: { coverage?: CoveragePolicy }) {
       });
       const body = (await response.json()) as { error?: string };
       if (!response.ok) throw new Error(body.error ?? "La couverture n'a pas été sauvegardée.");
-      setMessage("Couverture sauvegardée. Les prochains appels utilisent cette politique.");
+      setMessage("Couverture sauvegardée. Le routage téléphonique devra encore être configuré et vérifié.");
     } catch (error) {
       setMessage(error instanceof Error ? error.message : "Erreur de sauvegarde");
     } finally {
