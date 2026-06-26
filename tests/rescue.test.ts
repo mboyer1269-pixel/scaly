@@ -109,8 +109,8 @@ describe("computeRoiSnapshot", () => {
       // 1 appel servi en anglais
       call({ id: "en1", minutesAgo: 45, status: "completed", language: "en" }),
     ];
-    const d = computeDashboard(company, calls, []);
-    const roi = computeRoiSnapshot(company, d, calls);
+    const d = computeDashboard(company, calls, [], 14, NOW);
+    const roi = computeRoiSnapshot(company, d, calls, NOW);
     expect(roi.protectedCad).toBe(1200);
     expect(roi.wouldBeLostCount).toBe(2);
     expect(roi.atRiskCount).toBe(1);

@@ -8,7 +8,7 @@ import { ShieldCheck } from "lucide-react";
 import { ADD_ONS } from "@/domain/billing";
 import { PricingPlans } from "@/components/PricingPlans";
 
-export const metadata = { title: "Prix — Scaly" };
+export const metadata = { title: "Prix — Allô Maude" };
 
 const ENGAGEMENTS = [
   {
@@ -38,8 +38,8 @@ export default function PricingPage() {
     <div className="min-h-screen bg-ink-950 text-white">
       <header className="mx-auto flex max-w-6xl items-center justify-between px-6 py-5">
         <Link href="/" className="flex items-center gap-2">
-          <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-scaly-500 text-sm font-black">S</span>
-          <span className="text-lg font-bold">Scaly</span>
+          <span className="flex h-8 w-8 items-center justify-center rounded-full bg-amber-400 text-sm font-black text-ink-950">M</span>
+          <span className="text-lg font-bold">Allô Maude</span>
         </Link>
         <Link href="/dashboard" className="rounded-lg bg-white/10 px-4 py-2 text-sm font-medium hover:bg-white/20">
           Ouvrir le dashboard démo
@@ -67,7 +67,7 @@ export default function PricingPage() {
               Chaque ligne ci-dessous répond à un irritant documenté chez d'autres services de réception d'appels.
             </p>
           </div>
-          <div className="mx-auto grid max-w-4xl gap-4 sm:grid-cols-2">
+          <div className="mx-auto grid max-w-4xl grid-cols-1 gap-4 sm:grid-cols-2">
             {ENGAGEMENTS.map((e) => (
               <div key={e.t} className="rounded-xl border border-ink-800 bg-ink-900 p-5">
                 <h3 className="font-semibold text-white">{e.t}</h3>
@@ -80,7 +80,7 @@ export default function PricingPage() {
 
       <section className="mx-auto max-w-6xl px-6 py-14">
         <h2 className="text-center text-2xl font-bold">Options</h2>
-        <div className="mx-auto mt-6 grid max-w-4xl gap-4 sm:grid-cols-3">
+        <div className="mx-auto mt-6 grid max-w-4xl grid-cols-1 gap-4 sm:grid-cols-3">
           {ADD_ONS.map((a) => (
             <div key={a.id} className="rounded-xl border border-ink-800 bg-ink-900 p-5 text-center">
               <h3 className="text-sm font-semibold text-white">{a.label}</h3>
@@ -92,7 +92,7 @@ export default function PricingPage() {
       </section>
 
       <footer className="border-t border-ink-800 px-6 py-8 text-center text-xs text-ink-500">
-        Scaly — plateforme en construction. Démo honnête : aucun chiffre de marché inventé, aucune intégration prétendue.
+        Allô Maude — prix publics en dollars canadiens. Les intégrations non configurées restent identifiées.
       </footer>
     </div>
   );

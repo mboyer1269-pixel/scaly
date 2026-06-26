@@ -29,7 +29,7 @@ export async function POST(req: Request) {
   }
 
   const store = getStore();
-  const companyId = resolveCompanyId();
+  const companyId = await resolveCompanyId();
   const existing = await store.getCompany(companyId);
   if (!existing) return NextResponse.json({ error: "Entreprise introuvable" }, { status: 404 });
 

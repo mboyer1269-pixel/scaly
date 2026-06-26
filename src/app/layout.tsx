@@ -5,16 +5,18 @@ import { isAuthEnabled } from "@/server/auth";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Scaly — Réceptionniste vocale IA pour PME",
+  title: "Allô Maude — Réceptionniste virtuelle pour PME",
   description:
-    "Scaly répond aux appels de votre PME, qualifie les demandes, déclenche les suivis et mesure la valeur sauvée. FR-QC + EN.",
+    "Allô Maude répond aux appels de votre PME, qualifie les demandes et prépare les suivis. Français québécois et anglais.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
-  const content = (
+  const content = isAuthEnabled()
+    ? <ClerkProvider localization={frFR}>{children}</ClerkProvider>
+    : children;
+  return (
     <html lang="fr">
-      <body className="min-h-screen font-sans">{children}</body>
+      <body className="min-h-screen font-sans">{content}</body>
     </html>
   );
-  return isAuthEnabled() ? <ClerkProvider localization={frFR}>{content}</ClerkProvider> : content;
 }

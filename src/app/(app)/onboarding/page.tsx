@@ -1,7 +1,4 @@
-/**
- * Onboarding magique (P3.4) — URL du site + 2 phrases → brouillon de profil
- * et de persona, éditable, jamais actif sans approbation explicite.
- */
+/** Formation guidée — brouillon éditable, jamais actif sans approbation explicite. */
 import { PageHeader } from "@/components/ui";
 import { OnboardingWizard } from "@/components/OnboardingWizard";
 
@@ -11,8 +8,8 @@ export default function OnboardingPage() {
   return (
     <>
       <PageHeader
-        title="Onboarding magique"
-        subtitle="De votre site web à une réceptionniste configurée en quelques minutes — rien ne s'active sans votre approbation"
+        title="Former Maude"
+        subtitle="Décrivez votre entreprise, vérifiez ce que Maude a compris, puis approuvez chaque changement avant de le tester."
       />
       <OnboardingWizard />
     </>

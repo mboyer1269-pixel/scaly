@@ -8,7 +8,8 @@
  * brouillon. Partie IO : fetch du site + appel LLM structured output —
  * NotConfigured explicite sans clé, jamais de faux brouillon.
  */
-import type { Industry, LanguageCode } from "@/domain/company";
+import type { Company, Industry, LanguageCode } from "@/domain/company";
+import type { VoiceAgentConfig } from "@/domain/agent";
 import { INDUSTRY_LABELS } from "@/domain/company";
 
 export interface OnboardingDraft {
@@ -24,6 +25,26 @@ export interface OnboardingDraft {
   understanding: string;
 }
 
+export interface CoachingDraft {
+  businessDescription: string;
+  tone: Company["tone"];
+  services: string[];
+  serviceAreas: string[];
+  essentialQuestions: string[];
+  policies: string[];
+  persona: string;
+  style: string;
+  greetingScript: string;
+  closingScript: string;
+  allowedPhrases: string[];
+  forbiddenPhrases: string[];
+  answerLimits: string[];
+  transferPolicy: string;
+  ownerInstructions: string[];
+  understanding: string;
+  changedFields: string[];
+}
+
 export class OnboardingNotConfiguredError extends Error {
   constructor() {
     super("OPENAI_API_KEY absente — l'onboarding magique exige le moteur LLM (le formulaire manuel reste disponible).");
@@ -33,6 +54,150 @@ export class OnboardingNotConfiguredError extends Error {
 
 const INDUSTRIES = Object.keys(INDUSTRY_LABELS) as Industry[];
 const TONES = ["chaleureux", "professionnel", "energique"] as const;
+const COACHING_TONES: Company["tone"][] = ["chaleureux", "professionnel", "energique", "calme"];
+
+function cleanString(value: unknown, fallback = "", max = 2000): string {
+  return typeof value === "string" && value.trim() ? value.trim().slice(0, max) : fallback;
+}
+
+function cleanList(value: unknown, fallback: string[], max: number): string[] {
+  if (!Array.isArray(value)) return [...fallback];
+  return [...new Set(
+    value
+      .filter((item): item is string => typeof item === "string")
+      .map((item) => item.trim())
+      .filter((item) => item.length > 1),
+  )].slice(0, max);
+}
+
+function addUnique(base: string[], values: string[], max: number): string[] {
+  return [...new Set([...base, ...values].map((item) => item.trim()).filter((item) => item.length > 1))].slice(0, max);
+}
+
+function parseInlineList(text: string, pattern: RegExp): string[] {
+  const match = text.match(pattern);
+  if (!match?.[1]) return [];
+  return match[1]
+    .split(/\s*(?:,|;|\bet\b)\s*/i)
+    .map((item) => item.trim().replace(/[.?!]+$/, ""))
+    .filter((item) => item.length > 1);
+}
+
+/**
+ * Interpréteur local et déterministe des consignes du propriétaire.
+ * Toute la consigne est préservée mot pour mot; seules les structures
+ * explicitement reconnues sont proposées comme modifications additionnelles.
+ */
+export function buildCoachingDraft(
+  company: Company,
+  agent: VoiceAgentConfig,
+  rawInstruction: string,
+): CoachingDraft {
+  const instruction = cleanString(rawInstruction, "", 2000);
+  if (instruction.length < 10) throw new Error("Décrivez la consigne en au moins 10 caractères.");
+
+  const draft: CoachingDraft = {
+    businessDescription: instruction,
+    tone: company.tone,
+    services: [...company.services],
+    serviceAreas: [...company.serviceAreas],
+    essentialQuestions: [...company.essentialQuestions],
+    policies: [...company.policies],
+    persona: agent.persona,
+    style: agent.style,
+    greetingScript: agent.greetingScript,
+    closingScript: agent.closingScript,
+    allowedPhrases: [...agent.allowedPhrases],
+    forbiddenPhrases: [...agent.forbiddenPhrases],
+    answerLimits: [...agent.answerLimits],
+    transferPolicy: agent.transferPolicy,
+    ownerInstructions: addUnique(agent.ownerInstructions ?? [], [instruction], 20),
+    understanding: "La consigne exacte sera conservée. Les éléments reconnus ci-dessous sont des propositions à vérifier avant application.",
+    changedFields: ["businessDescription", "ownerInstructions"],
+  };
+
+  const lower = instruction.toLocaleLowerCase("fr-CA");
+  const tone = COACHING_TONES.find((candidate) => lower.includes(candidate));
+  if (tone) {
+    draft.tone = tone;
+    draft.changedFields.push("tone");
+  }
+
+  const services = parseInlineList(instruction, /nous offrons\s*:?\s*([^.!?]+)/i);
+  if (services.length) {
+    draft.services = addUnique(draft.services, services, 12);
+    draft.changedFields.push("services");
+  }
+
+  const areas = parseInlineList(instruction, /nous desservons\s*:?\s*([^.!?]+)/i);
+  if (areas.length) {
+    draft.serviceAreas = addUnique(draft.serviceAreas, areas, 12);
+    draft.changedFields.push("serviceAreas");
+  }
+
+  const question = instruction.match(/(?:demande|demander)\s+toujours\s+([^.!?]+)/i)?.[1]?.trim();
+  if (question) {
+    draft.essentialQuestions = addUnique(draft.essentialQuestions, [question], 12);
+    draft.changedFields.push("essentialQuestions");
+  }
+
+  const forbidden = instruction.match(/ne\s+jamais\s+([^.!?]+)/i)?.[1]?.trim();
+  if (forbidden) {
+    draft.forbiddenPhrases = addUnique(draft.forbiddenPhrases, [forbidden], 16);
+    draft.changedFields.push("forbiddenPhrases");
+  }
+
+  const greeting = instruction.match(/(?:commence|accueille)[^«"]*[«"]([^»"]+)[»"]/i)?.[1]?.trim();
+  if (greeting) {
+    draft.greetingScript = greeting;
+    draft.changedFields.push("greetingScript");
+  }
+
+  const transfer = instruction.match(/((?:transfère|transférer)[^.!?]+)/i)?.[1]?.trim();
+  if (transfer) {
+    draft.transferPolicy = addUnique(
+      draft.transferPolicy.split(/\s*\|\s*/),
+      [`Consigne du propriétaire : ${transfer}`],
+      8,
+    ).join(" | ");
+    draft.changedFields.push("transferPolicy");
+  }
+
+  draft.changedFields = [...new Set(draft.changedFields)];
+  return draft;
+}
+
+/** Revalide un brouillon de coaching envoyé par le navigateur avant application. */
+export function validateCoachingDraft(
+  raw: Record<string, unknown>,
+  company: Company,
+  agent: VoiceAgentConfig,
+): CoachingDraft {
+  const requestedTone = raw.tone as Company["tone"];
+  return {
+    businessDescription: cleanString(raw.businessDescription, company.businessDescription ?? "", 2000),
+    tone: COACHING_TONES.includes(requestedTone) ? requestedTone : company.tone,
+    services: cleanList(raw.services, company.services, 12),
+    serviceAreas: cleanList(raw.serviceAreas, company.serviceAreas, 12),
+    essentialQuestions: cleanList(raw.essentialQuestions, company.essentialQuestions, 12),
+    policies: cleanList(raw.policies, company.policies, 12),
+    persona: cleanString(raw.persona, agent.persona, 1000),
+    style: cleanString(raw.style, agent.style, 1000),
+    greetingScript: cleanString(raw.greetingScript, agent.greetingScript, 500),
+    closingScript: cleanString(raw.closingScript, agent.closingScript, 500),
+    allowedPhrases: cleanList(raw.allowedPhrases, agent.allowedPhrases, 16),
+    forbiddenPhrases: cleanList(raw.forbiddenPhrases, agent.forbiddenPhrases, 16),
+    answerLimits: cleanList(raw.answerLimits, agent.answerLimits, 16),
+    transferPolicy: cleanString(raw.transferPolicy, agent.transferPolicy, 1200),
+    ownerInstructions: cleanList(raw.ownerInstructions, agent.ownerInstructions ?? [], 20),
+    understanding: cleanString(
+      raw.understanding,
+      "Brouillon de coaching à vérifier avant application.",
+      1000,
+    ),
+    changedFields: cleanList(raw.changedFields, [], 20),
+  };
+}
 
 /** Extrait le texte utile d'une page HTML (pur, testé) : sans scripts/styles/balises. */
 export function extractWebsiteText(html: string, maxChars = 6000): string {
@@ -97,6 +262,10 @@ const DRAFT_SCHEMA = {
  */
 export function isForbiddenHost(hostname: string): boolean {
   const h = hostname.toLowerCase().replace(/^\[|\]$/g, ""); // IPv6 entre crochets
+  if (h.startsWith("::ffff:")) return isForbiddenHost(h.slice("::ffff:".length));
+  // Le fetch d'onboarding n'a pas besoin d'IPv6 littérale pour les PME ciblées.
+  // Refuser toute IPv6 directe évite les variantes loopback/link-local abrégées.
+  if (h.includes(":")) return true;
   if (h === "localhost" || h.endsWith(".localhost") || h.endsWith(".local") || h.endsWith(".internal") || !h.includes(".")) return true;
   if (h === "::1" || h === "0.0.0.0" || h.startsWith("fe80:") || h.startsWith("fc") || h.startsWith("fd")) return true;
   const ipv4 = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);

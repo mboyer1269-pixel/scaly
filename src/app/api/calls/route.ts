@@ -10,7 +10,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   // ?companyId= : réservé au fondateur (vue cross-tenant de /admin) — sinon le tenant de la session.
   const requested = url.searchParams.get("companyId");
-  const companyId = requested && getSessionRole() === "founder" ? requested : resolveCompanyId();
+  const companyId = requested && await getSessionRole() === "founder" ? requested : await resolveCompanyId();
   const status = url.searchParams.get("status");
   const urgency = url.searchParams.get("urgency");
   const intent = url.searchParams.get("intent");

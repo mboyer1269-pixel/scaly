@@ -9,11 +9,12 @@
  * Sans claim explicite, le rôle par défaut est "owner" (jamais founder par défaut).
  */
 import { auth } from "@clerk/nextjs/server";
+import { isClerkConfigured } from "./auth-policy";
 
 export type ScalyRole = "founder" | "owner" | "staff";
 
 export function isAuthEnabled(): boolean {
-  return Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY);
+  return isClerkConfigured();
 }
 
 interface RoleClaims {
@@ -28,8 +29,8 @@ export function roleFromSessionClaims(claims: unknown): ScalyRole {
 }
 
 /** Rôle de la session courante. "owner" par défaut quand l'auth est désactivée (dev local). */
-export function getSessionRole(): ScalyRole {
+export async function getSessionRole(): Promise<ScalyRole> {
   if (!isAuthEnabled()) return "owner";
-  const { sessionClaims } = auth();
+  const { sessionClaims } = await auth();
   return roleFromSessionClaims(sessionClaims);
 }

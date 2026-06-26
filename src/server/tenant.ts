@@ -57,9 +57,9 @@ export function decideTenant(authEnabled: boolean, claims: unknown): ResolvedTen
 }
 
 /** Tenant de la session courante, avec sa provenance. Émet un avertissement si le repli est dangereux. */
-export function resolveTenant(): ResolvedTenant {
+export async function resolveTenant(): Promise<ResolvedTenant> {
   if (!isAuthEnabled()) return { companyId: DEFAULT_COMPANY_ID, source: "no-auth", warn: false };
-  const { sessionClaims } = auth();
+  const { sessionClaims } = await auth();
   const decision = decideTenant(true, sessionClaims);
   if (decision.warn) {
     // Jamais silencieux : config incomplète d'un vrai utilisateur, à corriger
@@ -73,11 +73,11 @@ export function resolveTenant(): ResolvedTenant {
 }
 
 /** Id d'entreprise de la session courante ; tenant démo sans auth ou sans claim (repli signalé). */
-export function resolveCompanyId(): string {
-  return resolveTenant().companyId;
+export async function resolveCompanyId(): Promise<string> {
+  return (await resolveTenant()).companyId;
 }
 
 /** Entreprise de la session courante (undefined si l'id mappé n'existe pas en base). */
 export async function resolveCompany(): Promise<Company | undefined> {
-  return getStore().getCompany(resolveCompanyId());
+  return getStore().getCompany(await resolveCompanyId());
 }

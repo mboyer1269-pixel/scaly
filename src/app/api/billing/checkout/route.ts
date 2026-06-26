@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
 import { resolveCompanyId } from "@/server/tenant";
 import { PLANS, type PlanId } from "@/domain/billing";
-import { createCheckoutSession, isStripeConfigured, stripeConfigHint } from "@/adapters/integrations/stripe";
+import { createCheckoutSession, isStripeConfigured, resolveCheckoutOrigin, stripeConfigHint } from "@/adapters/integrations/stripe";
 import { clientKey, createRateLimiter, tooManyRequests } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
@@ -31,9 +31,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: stripeConfigHint() }, { status: 503 });
   }
 
-  const origin = req.headers.get("origin") ?? new URL(req.url).origin;
+  const origin = resolveCheckoutOrigin(req.url, req.headers.get("origin"));
   // Visiteur anonyme de /pricing → tenant démo ; session connectée → son entreprise.
-  const companyId = resolveCompanyId();
+  const companyId = await resolveCompanyId();
   try {
     const session = await createCheckoutSession(planId, companyId, origin);
     await getStore().recordAudit({

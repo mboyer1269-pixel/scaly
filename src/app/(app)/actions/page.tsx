@@ -1,4 +1,4 @@
-/** File d'actions — tout ce que Scaly a déclenché, avec audit trail complet. */
+/** File d'actions — tout ce que Maude a préparé, avec audit complet. */
 import Link from "next/link";
 import { getStore } from "@/server/store";
 import { resolveCompanyId } from "@/server/tenant";
@@ -18,10 +18,10 @@ const FILTERS: { value: string; label: string }[] = [
   { value: "requires_config", label: "Config. requise" },
 ];
 
-export default async function ActionsPage({ searchParams }: { searchParams: { status?: string } }) {
+export default async function ActionsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const store = getStore();
-  const allActions = await store.listActions(resolveCompanyId());
-  const filter = searchParams.status ?? "";
+  const allActions = await store.listActions(await resolveCompanyId());
+  const filter = (await searchParams).status ?? "";
   const actions = filter ? allActions.filter((a) => a.status === (filter as ActionStatus)) : allActions;
 
   const pendingCount = allActions.filter((a) => a.status === "pending").length;

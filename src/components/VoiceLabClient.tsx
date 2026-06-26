@@ -21,7 +21,7 @@ import {
   type VoiceSession,
 } from "@/domain/voice";
 import type { Tone } from "@/lib/labels";
-import { Badge, Card, HonestyNote, Stat } from "@/components/ui";
+import { Badge, Card, FIELD_INPUT_CLASS, FormNotice, HonestyNote, Stat } from "@/components/ui";
 
 const FIELD_STATUS_BADGE: Record<VoiceFieldStatus, { label: string; tone: Tone }> = {
   missing: { label: "manquant", tone: "slate" },
@@ -163,7 +163,7 @@ export function VoiceLabClient() {
   return (
     <div className="space-y-6">
       {session && t && (
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
           <Stat label="État de la session" value={VOICE_STATE_LABELS[session.state]} sub={session.scenarioId ?? "mode libre"} />
           <Stat label="Latence perçue p50" value={`${t.perceivedP50Ms} ms`} sub={`cible < ${LATENCY_TARGET_P50_MS} ms (simulée)`} tone={p50Tone} />
           <Stat label="Latence perçue p95" value={`${t.perceivedP95Ms} ms`} sub={`cible < ${LATENCY_TARGET_P95_MS} ms (simulée)`} tone={p95Tone} />
@@ -175,15 +175,18 @@ export function VoiceLabClient() {
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <div className="space-y-6 lg:col-span-2">
           <Card title="Scénario" subtitle="Chaque scénario est une golden conversation verrouillée en CI.">
             <div className="space-y-3 text-sm">
               <select
+                id="voice-lab-scenario"
+                name="scenarioId"
+                aria-label="Scénario de laboratoire vocal"
                 value={scenarioId}
                 onChange={(e) => setScenarioId(e.target.value)}
                 disabled={busy || autoplay}
-                className="w-full rounded-lg border border-ink-200 px-3 py-2"
+                className={FIELD_INPUT_CLASS}
               >
                 {VOICE_SCENARIOS.map((s) => (
                   <option key={s.id} value={s.id}>{s.title}</option>
@@ -199,7 +202,7 @@ export function VoiceLabClient() {
                 <button
                   onClick={() => start(false)}
                   disabled={busy}
-                  className="inline-flex items-center gap-2 rounded-lg bg-scaly-600 px-4 py-2 font-semibold text-white hover:bg-scaly-700 disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-scaly-700 px-4 py-2 font-semibold text-white hover:bg-scaly-800 disabled:opacity-50"
                 >
                   {busy && !session ? <Loader2 size={15} className="animate-spin" /> : <Mic size={15} />}
                   Démarrer le scénario
@@ -207,7 +210,7 @@ export function VoiceLabClient() {
                 <button
                   onClick={() => start(true)}
                   disabled={busy}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-ink-600 hover:bg-ink-50 disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-ink-300 px-3 py-2 text-ink-700 hover:bg-ink-50 disabled:opacity-50"
                 >
                   Mode libre
                 </button>
@@ -217,14 +220,14 @@ export function VoiceLabClient() {
                   <button
                     onClick={nextScenarioTurn}
                     disabled={busy || autoplay || terminal || scenarioDone}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-ink-700 hover:bg-ink-50 disabled:opacity-40"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-ink-300 px-3 py-2 text-ink-700 hover:bg-ink-50 disabled:opacity-40"
                   >
                     <StepForward size={14} /> Tour suivant ({Math.min(turnIndex, scenario?.callerTurns.length ?? 0)}/{scenario?.callerTurns.length})
                   </button>
                   <button
                     onClick={() => setAutoplay((a) => !a)}
                     disabled={busy || terminal || scenarioDone}
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-ink-700 hover:bg-ink-50 disabled:opacity-40"
+                    className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-ink-300 px-3 py-2 text-ink-700 hover:bg-ink-50 disabled:opacity-40"
                   >
                     {autoplay ? <Pause size={14} /> : <FastForward size={14} />}
                     {autoplay ? "Pause" : "Autoplay"}
@@ -233,20 +236,21 @@ export function VoiceLabClient() {
                     onClick={() => start(false)}
                     disabled={busy}
                     title="Recommencer le scénario"
-                    className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2 text-ink-600 hover:bg-ink-50 disabled:opacity-40"
+                    aria-label="Recommencer le scénario"
+                    className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg border border-ink-300 px-3 py-2 text-ink-700 hover:bg-ink-50 disabled:opacity-40"
                   >
                     <RotateCcw size={14} />
                   </button>
                 </div>
               )}
-              {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p>}
+              {error && <FormNotice tone="error">{error}</FormNotice>}
               {terminal && (
                 <div className="space-y-2 border-t border-ink-100 pt-3">
                   {!saved ? (
                     <button
                       onClick={save}
                       disabled={saving}
-                      className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-ink-900 px-4 py-2.5 font-semibold text-white hover:bg-ink-800 disabled:opacity-50"
+                      className="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-lg bg-ink-900 px-4 py-2.5 font-semibold text-white hover:bg-ink-800 disabled:opacity-50"
                     >
                       {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />}
                       Sauvegarder comme appel
@@ -325,7 +329,7 @@ export function VoiceLabClient() {
                         )}
                       >
                         <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
-                          {turn.speaker === "agent" ? "Agente Scaly" : "Appelant"} · {clock(turn.atMs)}
+                          {turn.speaker === "agent" ? "Maude" : "Appelant"} · {clock(turn.atMs)}
                           {turn.lang === "en" ? " · EN" : ""}
                           {turn.interrupted ? " · COUPÉE" : ""}
                         </p>
@@ -344,23 +348,28 @@ export function VoiceLabClient() {
                   <div className="mt-4 space-y-2 border-t border-ink-100 pt-3">
                     <div className="flex gap-2">
                       <input
+                        id="voice-lab-free-text"
+                        name="freeText"
+                        aria-label="Message libre à envoyer à Maude"
                         value={freeText}
                         onChange={(e) => setFreeText(e.target.value)}
                         onKeyDown={(e) => { if (e.key === "Enter" && !busy) void sendFree(); }}
                         placeholder={freeMode ? "Parle à l'agente (FR ou EN — détection automatique)…" : "Ou improvise un tour hors scénario…"}
                         disabled={busy || autoplay}
-                        className="flex-1 rounded-lg border border-ink-200 px-3 py-2 text-sm"
+                        className={`${FIELD_INPUT_CLASS} flex-1`}
                       />
                       <button
+                        type="button"
+                        aria-label="Envoyer le message à Maude"
                         onClick={() => void sendFree()}
                         disabled={busy || autoplay || !freeText.trim()}
-                        className="inline-flex items-center gap-1.5 rounded-lg bg-scaly-600 px-3 py-2 text-sm font-semibold text-white hover:bg-scaly-700 disabled:opacity-40"
+                        className="inline-flex min-h-11 min-w-11 items-center justify-center gap-1.5 rounded-lg bg-scaly-700 px-3 py-2 text-sm font-semibold text-white hover:bg-scaly-800 disabled:opacity-40"
                       >
                         {busy ? <Loader2 size={14} className="animate-spin" /> : <Send size={14} />}
                       </button>
                     </div>
                     <label className="flex items-center gap-2 text-xs text-ink-500">
-                      <input type="checkbox" checked={interrupt} onChange={(e) => setInterrupt(e.target.checked)} />
+                      <input name="interrupt" type="checkbox" checked={interrupt} onChange={(e) => setInterrupt(e.target.checked)} />
                       Couper l'agente (barge-in) sur ce tour
                     </label>
                   </div>
@@ -387,8 +396,8 @@ export function VoiceLabClient() {
           )}
 
           <HonestyNote>
-            P2A — cerveau conversationnel déterministe (NLU à règles, latences simulées et marquées comme telles). Le transport
-            audio réel (Twilio / OpenAI Realtime) arrive en P2B : mêmes contrats, vraies latences à la place des simulées.
+            Laboratoire conversationnel déterministe : règles et latences sont simulées et marquées comme telles. Le transport
+            audio réel reste séparé et doit être vérifié dans « Appels réels » avant toute mise en service.
           </HonestyNote>
         </div>
       </div>

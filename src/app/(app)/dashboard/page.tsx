@@ -34,7 +34,10 @@ export default async function DashboardPage() {
   const store = getStore();
   const company = (await resolveCompany())!;
   const calls = await store.listCalls(company.id);
-  const actions = await store.listActions(company.id);
+  const [actions, reviews] = await Promise.all([
+    store.listActions(company.id),
+    store.listReviewItems(company.id, "open"),
+  ]);
   const d = computeDashboard(company, calls, actions);
   const roi = computeRoiSnapshot(company, d, calls);
   const rescue = computeRescueQueue(company, calls, actions).slice(0, 5);
@@ -44,12 +47,12 @@ export default async function DashboardPage() {
   return (
     <>
       <PageHeader title={company.name} subtitle={`${company.sectorLabel} · ${company.city} · plan ${PLANS[company.planId].label}`}>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge tone={perf >= 70 ? "emerald" : perf >= 40 ? "amber" : "rose"}>Performance téléphonique : {perf}/100</Badge>
           <Badge tone="slate">{d.periodDays} derniers jours</Badge>
           <a
             href="/api/export/calls"
-            className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-1.5 text-xs font-medium text-ink-600 hover:bg-ink-50"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-ink-300 px-3 py-2 text-xs font-medium text-ink-700 hover:bg-ink-50"
           >
             <Download size={12} /> Export CRM (CSV)
           </a>
@@ -57,12 +60,12 @@ export default async function DashboardPage() {
       </PageHeader>
 
       {/* === La réponse en 60 secondes : l'argent, puis les appels à sauver === */}
-      <div className="mb-6 grid gap-6 lg:grid-cols-5">
-        <Card title="Ce que Scaly vous rapporte" subtitle={`${roi.periodDays} derniers jours · estimations par barème d'industrie, recalibrées par client`} className="lg:col-span-2">
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
+        <Card title="Ce que Maude a protégé" subtitle={`${roi.periodDays} derniers jours · estimations par barème d'industrie, recalibrées par client`} className="lg:col-span-2">
           <p className="text-3xl font-black text-emerald-600">{formatCad(roi.protectedCad)}</p>
           <p className="mt-1 text-sm leading-relaxed text-ink-600">
             protégés sur <span className="font-semibold text-ink-900">{roi.wouldBeLostCount} appel{roi.wouldBeLostCount > 1 ? "s" : ""}</span> qui
-            auraient été perdus sans Scaly{roi.multiple !== null && roi.multiple > 0 && (
+            auraient probablement été perdus sans réponse{roi.multiple !== null && roi.multiple > 0 && (
               <> — <span className="font-bold text-ink-900">{String(roi.multiple).replace(".", ",")}×</span> le prix de votre plan ({formatCad(roi.planPriceCad)}/mois)</>
             )}.
           </p>
@@ -84,13 +87,13 @@ export default async function DashboardPage() {
           className="lg:col-span-3"
           action={
             rescue.length > 0 ? (
-              <a href="/api/export/calls?status=rescue" className="text-xs font-medium text-scaly-600 hover:underline">Exporter la file</a>
+              <a href="/api/export/calls?status=rescue" className="inline-flex min-h-11 items-center text-xs font-medium text-scaly-700 hover:underline">Exporter la file</a>
             ) : undefined
           }
         >
           {rescue.length === 0 && (
             <div className="flex items-center gap-2 py-4 text-sm text-emerald-700">
-              <PhoneMissed size={16} /> Aucun appel à sauver — tout est répondu ou récupéré. C'est exactement le travail de Scaly.
+              <PhoneMissed size={16} /> Aucun appel à sauver — tout est répondu ou récupéré.
             </div>
           )}
           <ul className="space-y-2">
@@ -100,7 +103,7 @@ export default async function DashboardPage() {
                 <li key={e.call.id}>
                   <Link
                     href={`/calls/${e.call.id}`}
-                    className="flex flex-wrap items-center justify-between gap-2 rounded-lg border border-ink-100 px-3 py-2 hover:border-rose-300 hover:bg-rose-50/40"
+                    className="flex min-h-16 flex-wrap items-center justify-between gap-2 rounded-lg border border-ink-100 px-3 py-3 hover:border-rose-300 hover:bg-rose-50/40"
                   >
                     <div className="min-w-0">
                       <p className="truncate text-sm font-medium text-ink-900">
@@ -121,7 +124,7 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-3 xl:grid-cols-6">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-3 xl:grid-cols-6">
         <Stat label="Appels reçus" value={String(d.callsTotal)} sub={`${formatDuration(d.avgDurationSec)} en moyenne`} />
         <Stat label="Répondus par l'IA" value={String(d.answeredByAi)} sub={`${d.transferred} transférés à un humain`} />
         <Stat label="Manqués" value={String(d.missed)} sub={d.missedValueAtRiskCad > 0 ? `${formatCad(d.missedValueAtRiskCad)} à risque` : "tout est récupéré"} tone="rose" />
@@ -130,7 +133,18 @@ export default async function DashboardPage() {
         <Stat label="Urgences ouvertes" value={String(d.urgentOpen)} sub="à rappeler en priorité" tone={d.urgentOpen > 0 ? "rose" : "emerald"} />
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+      {reviews.length > 0 && (
+        <div className="mt-6 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
+          <p className="text-sm font-semibold text-amber-900">
+            {reviews.length} correction{reviews.length > 1 ? "s" : ""} à vérifier
+          </p>
+          <p className="mt-0.5 text-xs text-amber-800">
+            Ces éléments viennent d'appels inspectables. <Link href="/learn" className="font-semibold underline">Ouvrir À améliorer</Link>
+          </p>
+        </div>
+      )}
+
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         <Card title="Volume d'appels" subtitle="par jour — les barres roses sont les appels manqués" className="lg:col-span-2">
           <div className="flex h-28 items-end gap-1">
             {d.byDay.map((b) => (
@@ -145,6 +159,14 @@ export default async function DashboardPage() {
               </div>
             ))}
           </div>
+          <dl className="sr-only">
+            {d.byDay.map((b) => (
+              <div key={`summary-${b.date}`}>
+                <dt>{b.date}</dt>
+                <dd>{b.total} appel{b.total > 1 ? "s" : ""}, dont {b.missed} manqué{b.missed > 1 ? "s" : ""}</dd>
+              </div>
+            ))}
+          </dl>
         </Card>
 
         <Card title="Opportunités chaudes" subtitle="à rappeler, classées par valeur">
@@ -165,7 +187,7 @@ export default async function DashboardPage() {
         </Card>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card title="Intelligence stratégique" subtitle="générée par règles sur vos 14 derniers jours">
           {d.insights.length === 0 && <EmptyState text="Pas encore assez de données." />}
           <ul className="space-y-3">
@@ -190,7 +212,7 @@ export default async function DashboardPage() {
             <ul className="space-y-2">
               {d.atRiskCalls.map((c) => (
                 <li key={c.id}>
-                  <Link href={`/calls/${c.id}`} className="flex items-center justify-between gap-2 rounded-lg border border-rose-100 bg-rose-50/40 px-3 py-2 hover:border-rose-300">
+                  <Link href={`/calls/${c.id}`} className="flex min-h-16 items-center justify-between gap-2 rounded-lg border border-rose-100 bg-rose-50/40 px-3 py-3 hover:border-rose-300">
                     <p className="truncate text-sm text-ink-800">{c.callerName ?? c.fromNumber}</p>
                     <span className="text-xs text-rose-600">{formatDateTime(c.startedAt)}</span>
                   </Link>
@@ -199,7 +221,7 @@ export default async function DashboardPage() {
             </ul>
           </Card>
 
-          <Card title="Actions recommandées en attente" action={<Link href="/actions" className="text-xs font-medium text-scaly-600 hover:underline">Tout voir</Link>}>
+          <Card title="Actions recommandées en attente" action={<Link href="/actions" className="inline-flex min-h-11 items-center text-xs font-medium text-scaly-700 hover:underline">Tout voir</Link>}>
             {d.pendingActions.length === 0 && <EmptyState text="Aucune action en attente." />}
             <ul className="space-y-2">
               {d.pendingActions.map((a) => (
@@ -213,7 +235,7 @@ export default async function DashboardPage() {
         </div>
       </div>
 
-      <Card title="Appels récents" className="mt-6" action={<Link href="/calls" className="inline-flex items-center gap-1 text-xs font-medium text-scaly-600 hover:underline">Tous les appels <ArrowRight size={12} /></Link>}>
+      <Card title="Appels récents" className="mt-6" action={<Link href="/calls" className="inline-flex min-h-11 items-center gap-1 text-xs font-medium text-scaly-700 hover:underline">Tous les appels <ArrowRight size={12} /></Link>}>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>

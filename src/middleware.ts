@@ -9,12 +9,15 @@
  * - Tout le reste exige une session.
  */
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
+import type { NextRequest } from "next/server";
 import { NextResponse } from "next/server";
 import { roleFromSessionClaims } from "@/server/auth";
+import { authRuntimeMode, shouldBlockWithoutAuthConfig } from "@/server/auth-policy";
 
 const isPublicRoute = createRouteMatcher([
   "/",
   "/allo-maude(.*)",
+  "/privacy/delete-account(.*)",
   "/pricing(.*)",
   "/sign-in(.*)",
   "/sign-up(.*)",
@@ -22,22 +25,30 @@ const isPublicRoute = createRouteMatcher([
   "/api/cron/(.*)",
   "/api/billing/webhook(.*)",
   "/api/billing/checkout(.*)",
+  "/api/mobile/(.*)",
   "/api/sms/incoming(.*)",
   "/api/voice/(.*)",
 ]);
 const isFounderRoute = createRouteMatcher(["/admin(.*)", "/api/admin(.*)", "/status(.*)"]);
 
-const authEnabled = Boolean(process.env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && process.env.CLERK_SECRET_KEY);
+const authMode = authRuntimeMode();
 
-export default authEnabled
-  ? clerkMiddleware((auth, req) => {
+export default authMode.mode === "clerk"
+  ? clerkMiddleware(async (auth, req) => {
       if (isPublicRoute(req)) return;
-      auth().protect();
-      if (isFounderRoute(req) && roleFromSessionClaims(auth().sessionClaims) !== "founder") {
+      await auth.protect();
+      const { sessionClaims } = await auth();
+      if (isFounderRoute(req) && roleFromSessionClaims(sessionClaims) !== "founder") {
         return NextResponse.redirect(new URL("/dashboard", req.url));
       }
     })
-  : function middleware() {
+  : function middleware(req: NextRequest) {
+      if (shouldBlockWithoutAuthConfig(process.env, isPublicRoute(req))) {
+        return new NextResponse("Allô Maude: authentification requise, mais Clerk n'est pas configuré.", {
+          status: 503,
+          headers: { "content-type": "text/plain; charset=utf-8" },
+        });
+      }
       return NextResponse.next();
     };
 

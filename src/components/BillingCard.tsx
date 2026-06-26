@@ -5,7 +5,7 @@ import Link from "next/link";
 import { CreditCard, Loader2 } from "lucide-react";
 import type { Company } from "@/domain/company";
 import { PLANS } from "@/domain/billing";
-import { Badge, Card } from "@/components/ui";
+import { Badge, Card, FormNotice } from "@/components/ui";
 
 /** Carte abonnement (settings) — plan courant + portail client Stripe. */
 export function BillingCard({ company }: { company: Company }) {
@@ -45,16 +45,17 @@ export function BillingCard({ company }: { company: Company }) {
         {company.billing?.currentPeriodEnd && (
           <p className="text-xs text-ink-500">Période courante jusqu'au {new Date(company.billing.currentPeriodEnd).toLocaleDateString("fr-CA")}</p>
         )}
-        {notice && <p className="rounded-lg bg-amber-50 px-3 py-2 text-xs text-amber-800">{notice}</p>}
+        {notice && <FormNotice tone="info">{notice}</FormNotice>}
         <div className="flex items-center gap-3">
           <button
+            type="button"
             onClick={openPortal}
             disabled={busy}
-            className="inline-flex items-center gap-2 rounded-lg border border-ink-200 px-4 py-2 text-sm font-medium text-ink-700 hover:bg-ink-50 disabled:opacity-50"
+            className="inline-flex min-h-11 items-center gap-2 rounded-lg border border-ink-300 px-4 py-2 text-sm font-medium text-ink-700 hover:bg-ink-50 disabled:opacity-50"
           >
             {busy ? <Loader2 size={15} className="animate-spin" /> : <CreditCard size={15} />} Gérer mon abonnement
           </button>
-          <Link href="/pricing" className="text-xs text-scaly-700 underline">Voir les prix publics</Link>
+          <Link href="/pricing" className="inline-flex min-h-11 items-center text-xs font-medium text-scaly-700 underline">Voir les prix publics</Link>
         </div>
       </div>
     </Card>

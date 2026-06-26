@@ -1,10 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { type FormEvent, useState } from "react";
 import { Loader2, Save } from "lucide-react";
 import type { Company } from "@/domain/company";
 import { INDUSTRY_LABELS } from "@/domain/company";
-import { Badge, Card, HonestyNote } from "@/components/ui";
+import { Badge, Card, FIELD_INPUT_CLASS, FIELD_LABEL_CLASS, FormNotice, HonestyNote } from "@/components/ui";
 
 const DAY_LABELS = ["Dim", "Lun", "Mar", "Mer", "Jeu", "Ven", "Sam"];
 
@@ -15,9 +15,10 @@ function parseLines(s: string): string[] {
   return s.split("\n").map((x) => x.trim()).filter(Boolean);
 }
 
-export function SettingsForm({ company }: { company: Company }) {
+export function SettingsForm({ company, persistent }: { company: Company; persistent: boolean }) {
   const [form, setForm] = useState({
     name: company.name,
+    businessDescription: company.businessDescription ?? "",
     sectorLabel: company.sectorLabel,
     city: company.city,
     mainPhone: company.mainPhone,
@@ -42,21 +43,23 @@ export function SettingsForm({ company }: { company: Company }) {
     piiMinimization: company.compliance.piiMinimization,
   });
   const [saving, setSaving] = useState(false);
-  const [message, setMessage] = useState<string | null>(null);
+  const [feedback, setFeedback] = useState<{ tone: "success" | "error"; text: string } | null>(null);
 
   function set<K extends keyof typeof form>(key: K, value: (typeof form)[K]) {
     setForm((f) => ({ ...f, [key]: value }));
   }
 
-  async function save() {
+  async function save(event?: FormEvent<HTMLFormElement>) {
+    event?.preventDefault();
     setSaving(true);
-    setMessage(null);
+    setFeedback(null);
     try {
       const res = await fetch("/api/company", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: form.name,
+          businessDescription: form.businessDescription,
           sectorLabel: form.sectorLabel,
           city: form.city,
           mainPhone: form.mainPhone,
@@ -84,63 +87,99 @@ export function SettingsForm({ company }: { company: Company }) {
         }),
       });
       if (!res.ok) throw new Error("Erreur de sauvegarde");
-      setMessage("Configuration sauvegardée (en mémoire — base de données en P1). Entrée ajoutée à l'audit trail.");
+      setFeedback({
+        tone: "success",
+        text: persistent
+          ? "Configuration sauvegardée dans PostgreSQL. Entrée ajoutée au journal d'audit."
+          : "Configuration sauvegardée temporairement en mémoire. Entrée ajoutée au journal d'audit.",
+      });
     } catch (e) {
-      setMessage(e instanceof Error ? e.message : "Erreur");
+      setFeedback({ tone: "error", text: e instanceof Error ? e.message : "Erreur" });
     } finally {
       setSaving(false);
     }
   }
 
-  const input = "w-full rounded-lg border border-ink-200 px-3 py-2 text-sm";
-  const label = "mb-1 block text-xs font-medium text-ink-500";
+  const input = FIELD_INPUT_CLASS;
+  const label = FIELD_LABEL_CLASS;
 
   return (
-    <div className="grid gap-6 lg:grid-cols-2">
+    <form onSubmit={save} className="grid grid-cols-1 gap-6 lg:grid-cols-2">
       <Card title="Identité">
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div><span className={label}>Nom de l'entreprise</span><input className={input} value={form.name} onChange={(e) => set("name", e.target.value)} /></div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <div>
-            <span className={label}>Secteur</span>
-            <input className={input} value={form.sectorLabel} onChange={(e) => set("sectorLabel", e.target.value)} />
-            <p className="mt-1 text-[11px] text-ink-400">Industrie de script : {INDUSTRY_LABELS[company.industry]} (changement de script en P1)</p>
+            <label className={label} htmlFor="settings-name">Nom de l'entreprise</label>
+            <input id="settings-name" name="name" className={input} value={form.name} onChange={(e) => set("name", e.target.value)} />
           </div>
-          <div><span className={label}>Ville</span><input className={input} value={form.city} onChange={(e) => set("city", e.target.value)} /></div>
           <div>
-            <span className={label}>Ton de voix</span>
-            <select className={input} value={form.tone} onChange={(e) => set("tone", e.target.value as Company["tone"])}>
+            <label className={label} htmlFor="settings-sector">Secteur</label>
+            <input id="settings-sector" name="sectorLabel" className={input} value={form.sectorLabel} onChange={(e) => set("sectorLabel", e.target.value)} />
+            <p className="mt-1 text-[11px] text-ink-600">Industrie du script actif : {INDUSTRY_LABELS[company.industry]}. Pour la modifier, utilisez « Former Maude ».</p>
+          </div>
+          <div>
+            <label className={label} htmlFor="settings-city">Ville</label>
+            <input id="settings-city" name="city" className={input} value={form.city} onChange={(e) => set("city", e.target.value)} />
+          </div>
+          <div>
+            <label className={label} htmlFor="settings-tone">Ton de voix</label>
+            <select id="settings-tone" name="tone" className={input} value={form.tone} onChange={(e) => set("tone", e.target.value as Company["tone"])}>
               <option value="professionnel">Professionnel</option>
               <option value="chaleureux">Chaleureux</option>
               <option value="energique">Énergique</option>
               <option value="calme">Calme</option>
             </select>
           </div>
-          <div><span className={label}>Numéro principal</span><input className={input} value={form.mainPhone} onChange={(e) => set("mainPhone", e.target.value)} /></div>
-          <div><span className={label}>Numéro de transfert (humain)</span><input className={input} value={form.transferPhone} onChange={(e) => set("transferPhone", e.target.value)} /></div>
           <div>
-            <span className={label}>Langue par défaut</span>
-            <select className={input} value={form.defaultLanguage} onChange={(e) => set("defaultLanguage", e.target.value as Company["defaultLanguage"])}>
+            <label className={label} htmlFor="settings-main-phone">Numéro principal</label>
+            <input id="settings-main-phone" name="mainPhone" type="tel" className={input} value={form.mainPhone} onChange={(e) => set("mainPhone", e.target.value)} />
+          </div>
+          <div>
+            <label className={label} htmlFor="settings-transfer-phone">Numéro de transfert (humain)</label>
+            <input id="settings-transfer-phone" name="transferPhone" type="tel" className={input} value={form.transferPhone} onChange={(e) => set("transferPhone", e.target.value)} />
+          </div>
+          <div>
+            <label className={label} htmlFor="settings-language">Langue par défaut</label>
+            <select id="settings-language" name="defaultLanguage" className={input} value={form.defaultLanguage} onChange={(e) => set("defaultLanguage", e.target.value as Company["defaultLanguage"])}>
               <option value="fr">Français</option>
               <option value="en">Anglais</option>
             </select>
+          </div>
+          <div className="sm:col-span-2">
+            <label className={label} htmlFor="settings-business-description">Description approuvée de l'entreprise</label>
+            <textarea
+              id="settings-business-description"
+              name="businessDescription"
+              rows={4}
+              className={input}
+              value={form.businessDescription}
+              onChange={(e) => set("businessDescription", e.target.value)}
+            />
+            <p className="mt-1 text-[11px] text-ink-600">Ce contexte est transmis à Maude. Utilisez « Former Maude » pour obtenir des propositions guidées.</p>
           </div>
         </div>
       </Card>
 
       <Card title="Heures d'ouverture" subtitle="hors de ces heures, les appels répondus comptent comme « sauvés »">
         <div className="flex flex-wrap items-center gap-4">
-          <div><span className={label}>Ouverture</span><input type="time" className={input} value={form.open} onChange={(e) => set("open", e.target.value)} /></div>
-          <div><span className={label}>Fermeture</span><input type="time" className={input} value={form.close} onChange={(e) => set("close", e.target.value)} /></div>
+          <div>
+            <label className={label} htmlFor="settings-open">Ouverture</label>
+            <input id="settings-open" name="open" type="time" className={input} value={form.open} onChange={(e) => set("open", e.target.value)} />
+          </div>
+          <div>
+            <label className={label} htmlFor="settings-close">Fermeture</label>
+            <input id="settings-close" name="close" type="time" className={input} value={form.close} onChange={(e) => set("close", e.target.value)} />
+          </div>
         </div>
         <div className="mt-4 flex flex-wrap gap-2">
           {DAY_LABELS.map((d, i) => (
             <button
               key={d}
               type="button"
+              aria-pressed={form.days.includes(i)}
               onClick={() => set("days", form.days.includes(i) ? form.days.filter((x) => x !== i) : [...form.days, i].sort())}
               className={form.days.includes(i)
-                ? "rounded-lg bg-scaly-600 px-3 py-1.5 text-xs font-semibold text-white"
-                : "rounded-lg border border-ink-200 px-3 py-1.5 text-xs text-ink-500 hover:bg-ink-50"}
+                ? "min-h-11 min-w-11 rounded-lg bg-scaly-700 px-3 py-2 text-xs font-semibold text-white"
+                : "min-h-11 min-w-11 rounded-lg border border-ink-300 px-3 py-2 text-xs text-ink-700 hover:bg-ink-50"}
             >
               {d}
             </button>
@@ -150,38 +189,50 @@ export function SettingsForm({ company }: { company: Company }) {
 
       <Card title="Offre et territoire">
         <div className="space-y-4">
-          <div><span className={label}>Services offerts (un par ligne)</span><textarea rows={5} className={input} value={form.services} onChange={(e) => set("services", e.target.value)} /></div>
-          <div><span className={label}>Zones desservies (une par ligne)</span><textarea rows={3} className={input} value={form.serviceAreas} onChange={(e) => set("serviceAreas", e.target.value)} /></div>
-          <div><span className={label}>Politiques internes (une par ligne)</span><textarea rows={3} className={input} value={form.policies} onChange={(e) => set("policies", e.target.value)} /></div>
-          <div><span className={label}>Questions essentielles à poser (une par ligne)</span><textarea rows={4} className={input} value={form.essentialQuestions} onChange={(e) => set("essentialQuestions", e.target.value)} /></div>
+          <div>
+            <label className={label} htmlFor="settings-services">Services offerts (un par ligne)</label>
+            <textarea id="settings-services" name="services" rows={5} className={input} value={form.services} onChange={(e) => set("services", e.target.value)} />
+          </div>
+          <div>
+            <label className={label} htmlFor="settings-service-areas">Zones desservies (une par ligne)</label>
+            <textarea id="settings-service-areas" name="serviceAreas" rows={3} className={input} value={form.serviceAreas} onChange={(e) => set("serviceAreas", e.target.value)} />
+          </div>
+          <div>
+            <label className={label} htmlFor="settings-policies">Politiques internes (une par ligne)</label>
+            <textarea id="settings-policies" name="policies" rows={3} className={input} value={form.policies} onChange={(e) => set("policies", e.target.value)} />
+          </div>
+          <div>
+            <label className={label} htmlFor="settings-essential-questions">Questions essentielles à poser (une par ligne)</label>
+            <textarea id="settings-essential-questions" name="essentialQuestions" rows={4} className={input} value={form.essentialQuestions} onChange={(e) => set("essentialQuestions", e.target.value)} />
+          </div>
         </div>
       </Card>
 
       <div className="space-y-6">
         <Card title="Préférences de suivi">
           <div className="space-y-2.5 text-sm">
-            <label className="flex items-center gap-2"><input type="checkbox" checked={form.smsConfirmation} onChange={(e) => set("smsConfirmation", e.target.checked)} /> SMS de confirmation après prise de RDV</label>
-            <label className="flex items-center gap-2"><input type="checkbox" checked={form.missedCallAutoSms} onChange={(e) => set("missedCallAutoSms", e.target.checked)} /> SMS automatique de rappel d'appel manqué</label>
-            <label className="flex items-center gap-2"><input type="checkbox" checked={form.emailSummary} onChange={(e) => set("emailSummary", e.target.checked)} /> Résumé d'appel par courriel</label>
-            <label className="flex items-center gap-2">Résumé quotidien à
-              <input type="number" min={0} max={23} className="w-20 rounded-lg border border-ink-200 px-2 py-1" value={form.dailyDigestHour} onChange={(e) => set("dailyDigestHour", Number(e.target.value))} /> h
+            <label className="flex min-h-11 cursor-pointer items-center gap-2"><input name="smsConfirmation" type="checkbox" checked={form.smsConfirmation} onChange={(e) => set("smsConfirmation", e.target.checked)} /> SMS de confirmation après prise de RDV</label>
+            <label className="flex min-h-11 cursor-pointer items-center gap-2"><input name="missedCallAutoSms" type="checkbox" checked={form.missedCallAutoSms} onChange={(e) => set("missedCallAutoSms", e.target.checked)} /> SMS automatique de rappel d'appel manqué</label>
+            <label className="flex min-h-11 cursor-pointer items-center gap-2"><input name="emailSummary" type="checkbox" checked={form.emailSummary} onChange={(e) => set("emailSummary", e.target.checked)} /> Résumé d'appel par courriel</label>
+            <label className="flex min-h-11 items-center gap-2">Résumé quotidien à
+              <input name="dailyDigestHour" type="number" min={0} max={23} className="min-h-11 w-20 rounded-lg border border-ink-300 px-2 py-1 text-ink-900" value={form.dailyDigestHour} onChange={(e) => set("dailyDigestHour", Number(e.target.value))} /> h
             </label>
           </div>
         </Card>
 
         <Card title="Conformité" subtitle="Loi 25 (Québec) / PIPEDA — voir docs/COMPLIANCE.md">
           <div className="space-y-2.5 text-sm">
-            <label className="flex items-center gap-2"><input type="checkbox" checked={form.aiDisclosure} onChange={(e) => set("aiDisclosure", e.target.checked)} /> L'agent s'annonce comme assistant virtuel (recommandé)</label>
-            <label className="flex items-center gap-2"><input type="checkbox" checked={form.recordingEnabled} onChange={(e) => set("recordingEnabled", e.target.checked)} /> Enregistrement des appels (P2 — désactivé tant que la téléphonie n'est pas branchée)</label>
-            <label className="flex items-center gap-2"><input type="checkbox" checked={form.recordingDisclosure} onChange={(e) => set("recordingDisclosure", e.target.checked)} /> Mention d'enregistrement en début d'appel</label>
-            <label className="flex items-center gap-2"><input type="checkbox" checked={form.piiMinimization} onChange={(e) => set("piiMinimization", e.target.checked)} /> Minimisation des renseignements personnels collectés</label>
-            <label className="flex items-center gap-2">Rétention des transcriptions :
-              <input type="number" min={7} max={730} className="w-24 rounded-lg border border-ink-200 px-2 py-1" value={form.retentionDays} onChange={(e) => set("retentionDays", Number(e.target.value))} /> jours
+            <label className="flex min-h-11 cursor-pointer items-center gap-2"><input name="aiDisclosure" type="checkbox" checked={form.aiDisclosure} onChange={(e) => set("aiDisclosure", e.target.checked)} /> L'agent s'annonce comme assistant virtuel (recommandé)</label>
+            <label className="flex min-h-11 cursor-pointer items-center gap-2"><input name="recordingEnabled" type="checkbox" checked={form.recordingEnabled} onChange={(e) => set("recordingEnabled", e.target.checked)} /> Enregistrement des appels (sans effet tant que la téléphonie réelle n'est pas vérifiée)</label>
+            <label className="flex min-h-11 cursor-pointer items-center gap-2"><input name="recordingDisclosure" type="checkbox" checked={form.recordingDisclosure} onChange={(e) => set("recordingDisclosure", e.target.checked)} /> Mention d'enregistrement en début d'appel</label>
+            <label className="flex min-h-11 cursor-pointer items-center gap-2"><input name="piiMinimization" type="checkbox" checked={form.piiMinimization} onChange={(e) => set("piiMinimization", e.target.checked)} /> Minimisation des renseignements personnels collectés</label>
+            <label className="flex min-h-11 items-center gap-2">Rétention des transcriptions :
+              <input name="retentionDays" type="number" min={7} max={730} className="min-h-11 w-24 rounded-lg border border-ink-300 px-2 py-1 text-ink-900" value={form.retentionDays} onChange={(e) => set("retentionDays", Number(e.target.value))} /> jours
             </label>
           </div>
         </Card>
 
-        <Card title="Règles d'escalade" subtitle="lecture seule — éditeur visuel prévu en P1">
+        <Card title="Règles d'escalade" subtitle="lecture seule dans cette version">
           <ul className="space-y-2">
             {company.escalationRules.map((r) => (
               <li key={r.id} className="flex items-start gap-2 rounded-lg border border-ink-100 px-3 py-2 text-xs text-ink-600">
@@ -194,14 +245,18 @@ export function SettingsForm({ company }: { company: Company }) {
       </div>
 
       <div className="lg:col-span-2">
-        {message && <p className="mb-3 rounded-lg bg-scaly-50 px-3 py-2 text-sm text-scaly-800">{message}</p>}
+        {feedback && <div className="mb-3"><FormNotice tone={feedback.tone}>{feedback.text}</FormNotice></div>}
         <div className="flex items-center gap-3">
-          <button onClick={save} disabled={saving} className="inline-flex items-center gap-2 rounded-lg bg-scaly-600 px-5 py-2.5 text-sm font-semibold text-white hover:bg-scaly-700 disabled:opacity-50">
+          <button type="submit" disabled={saving} className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-scaly-700 px-5 py-2.5 text-sm font-semibold text-white hover:bg-scaly-800 disabled:opacity-50">
             {saving ? <Loader2 size={15} className="animate-spin" /> : <Save size={15} />} Sauvegarder
           </button>
-          <HonestyNote>Persistance en mémoire : les changements survivent à la navigation mais pas au redémarrage du serveur (Postgres prévu en P1).</HonestyNote>
+          <HonestyNote>
+            {persistent
+              ? "Persistance PostgreSQL active pour cette session."
+              : "Mode mémoire : les changements survivent à la navigation mais pas au redémarrage du serveur."}
+          </HonestyNote>
         </div>
       </div>
-    </div>
+    </form>
   );
 }

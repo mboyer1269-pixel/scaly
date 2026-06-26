@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function AgentPage() {
   const store = getStore();
-  const companyId = resolveCompanyId();
+  const companyId = await resolveCompanyId();
   const agent = (await store.getAgentByCompany(companyId))!;
   const company = (await store.getCompany(companyId))!;
   return (

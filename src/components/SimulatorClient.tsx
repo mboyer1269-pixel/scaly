@@ -7,27 +7,30 @@
  */
 import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
-import { Loader2, Phone, RotateCcw } from "lucide-react";
+import { ArrowRight, Loader2, Phone, RotateCcw } from "lucide-react";
 import clsx from "clsx";
-import { INDUSTRY_SCRIPTS } from "@/data/industry-scripts";
 import { PERSONAS } from "@/data/personas";
-import { INDUSTRY_LABELS, type Industry } from "@/domain/company";
 import { INTENT_LABELS, NEXT_ACTION_LABELS, type Call } from "@/domain/call";
 import type { ScalyAction } from "@/domain/action";
-import { Badge, Card, HonestyNote } from "@/components/ui";
+import type { ReviewItem } from "@/domain/review";
+import type { RealityLabel } from "@/domain/readiness";
+import { Badge, Card, FIELD_INPUT_CLASS, FIELD_LABEL_CLASS, FormNotice, HonestyNote } from "@/components/ui";
+import { RealityBadge } from "@/components/RealityBadge";
 import { actionStatusBadge, leadBadge, urgencyBadge } from "@/lib/labels";
 import { formatCad } from "@/lib/format";
 
 interface SimResponse {
   call: Call;
   actions: ScalyAction[];
+  reviewItems: ReviewItem[];
+  reality: RealityLabel;
+  auditRecorded: boolean;
   seed: number;
   persisted: boolean;
   error?: string;
 }
 
-export function SimulatorClient() {
-  const [scriptId, setScriptId] = useState("script_domicile");
+export function SimulatorClient({ scriptId, scriptName }: { scriptId: string; scriptName: string }) {
   const [personaId, setPersonaId] = useState("persona_urgence");
   const [seedInput, setSeedInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -37,6 +40,13 @@ export function SimulatorClient() {
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => () => { if (timer.current) clearInterval(timer.current); }, []);
+
+  function clearResult() {
+    if (timer.current) clearInterval(timer.current);
+    setResult(null);
+    setRevealed(0);
+    setError(null);
+  }
 
   async function run(seed?: number) {
     setLoading(true);
@@ -77,56 +87,70 @@ export function SimulatorClient() {
   const l = leadBadge(intel?.leadQuality);
 
   return (
-    <div className="grid gap-6 lg:grid-cols-5">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
       <div className="space-y-6 lg:col-span-2">
         <Card title="Paramètres de l'appel">
           <div className="space-y-4 text-sm">
+            <div className="rounded-lg border border-ink-200 bg-ink-50 px-3 py-2">
+              <p className="text-xs font-medium text-ink-700">Configuration testée</p>
+              <p className="mt-0.5 font-semibold text-ink-800">{scriptName}</p>
+              <p className="mt-1 text-xs text-ink-600">La démo utilise toujours le script réellement configuré pour cette entreprise.</p>
+            </div>
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-ink-500">Industrie / script</span>
-              <select value={scriptId} onChange={(e) => setScriptId(e.target.value)} className="w-full rounded-lg border border-ink-200 px-3 py-2">
-                {INDUSTRY_SCRIPTS.map((s) => (
-                  <option key={s.id} value={s.id}>{INDUSTRY_LABELS[s.industry as Industry]}</option>
-                ))}
-              </select>
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs font-medium text-ink-500">Type d'appelant</span>
-              <select value={personaId} onChange={(e) => setPersonaId(e.target.value)} className="w-full rounded-lg border border-ink-200 px-3 py-2">
+              <span className={FIELD_LABEL_CLASS}>Type d'appelant</span>
+              <select
+                id="simulator-persona"
+                name="personaId"
+                value={personaId}
+                onChange={(e) => {
+                  setPersonaId(e.target.value);
+                  clearResult();
+                }}
+                className={FIELD_INPUT_CLASS}
+              >
                 {PERSONAS.map((p) => (
                   <option key={p.id} value={p.id}>{p.label}</option>
                 ))}
               </select>
             </label>
             <label className="block">
-              <span className="mb-1 block text-xs font-medium text-ink-500">Seed (optionnel — pour rejouer exactement le même appel)</span>
+              <span className={FIELD_LABEL_CLASS}>Seed (optionnel — pour rejouer exactement le même appel)</span>
               <input
+                id="simulator-seed"
+                name="seed"
+                inputMode="numeric"
                 value={seedInput}
-                onChange={(e) => setSeedInput(e.target.value.replace(/\D/g, ""))}
+                onChange={(e) => {
+                  setSeedInput(e.target.value.replace(/\D/g, ""));
+                  clearResult();
+                }}
                 placeholder="aléatoire"
-                className="w-full rounded-lg border border-ink-200 px-3 py-2"
+                className={FIELD_INPUT_CLASS}
               />
             </label>
             <div className="flex gap-2 pt-1">
               <button
+                type="button"
                 onClick={() => run(seedInput ? Number(seedInput) : undefined)}
                 disabled={loading}
-                className="inline-flex flex-1 items-center justify-center gap-2 rounded-lg bg-scaly-600 px-4 py-2.5 font-semibold text-white hover:bg-scaly-700 disabled:opacity-50"
+                className="inline-flex min-h-11 flex-1 items-center justify-center gap-2 rounded-lg bg-scaly-700 px-4 py-2.5 font-semibold text-white hover:bg-scaly-800 disabled:opacity-50"
               >
                 {loading ? <Loader2 size={16} className="animate-spin" /> : <Phone size={16} />}
                 Lancer l'appel simulé
               </button>
               {result && (
                 <button
+                  type="button"
                   onClick={() => run(result.seed)}
                   disabled={loading}
                   title="Rejouer le même seed"
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-ink-200 px-3 py-2.5 text-ink-600 hover:bg-ink-50 disabled:opacity-50"
+                  className="inline-flex min-h-11 items-center gap-1.5 rounded-lg border border-ink-300 px-3 py-2.5 text-ink-700 hover:bg-ink-50 disabled:opacity-50"
                 >
                   <RotateCcw size={14} /> Rejouer
                 </button>
               )}
             </div>
-            {error && <p className="rounded-lg bg-rose-50 px-3 py-2 text-xs text-rose-700">{error}</p>}
+            {error && <FormNotice tone="error">{error}</FormNotice>}
             {result && (
               <p className="text-xs text-ink-500">
                 Seed utilisé : <span className="font-mono font-medium">{result.seed}</span>
@@ -137,7 +161,7 @@ export function SimulatorClient() {
         </Card>
 
         {intel && fullyRevealed && (
-          <Card title="Analyse de l'appel" action={<Badge tone="violet">moteur {intel.engine}</Badge>}>
+          <Card title="Analyse de l'appel" action={result ? <RealityBadge reality={result.reality} /> : <Badge tone="violet">moteur {intel.engine}</Badge>}>
             <div className="space-y-3 text-sm">
               <p className="rounded-lg bg-ink-50 px-3 py-2 leading-relaxed text-ink-800">{intel.summary}</p>
               <div className="flex flex-wrap gap-1.5">
@@ -164,7 +188,29 @@ export function SimulatorClient() {
                   </ul>
                 </div>
               )}
-              <HonestyNote>Conversation générée par moteur de règles déterministe — pas un LLM. Objectif : valider scripts, escalades et actions avant la voix réelle (P2).</HonestyNote>
+              {result && (
+                <div className="rounded-xl border border-ink-200 bg-ink-50 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-ink-500">Preuves persistées</p>
+                  <p className="mt-1 text-sm text-ink-800">
+                    1 appel · {result.actions.length} action(s) · {result.reviewItems.length} élément(s) à réviser · audit {result.auditRecorded ? "enregistré" : "absent"}
+                  </p>
+                  <div className="mt-3 flex flex-wrap gap-2">
+                    <Link href={`/calls/${result.call.id}`} className="inline-flex min-h-11 items-center gap-1 rounded-lg bg-ink-900 px-3 py-2 text-xs font-semibold text-white">
+                      Ouvrir l'appel <ArrowRight size={13} />
+                    </Link>
+                    <Link href="/follow-up" className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-ink-300 bg-white px-3 py-2 text-xs font-semibold text-ink-700">
+                      Voir les suivis
+                    </Link>
+                    <Link href="/learn" className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-ink-300 bg-white px-3 py-2 text-xs font-semibold text-ink-700">
+                      Corriger les incertitudes
+                    </Link>
+                    <Link href="/readiness/demo" className="inline-flex min-h-11 items-center gap-1 rounded-lg border border-ink-300 bg-white px-3 py-2 text-xs font-semibold text-ink-700">
+                      Vérifier la démo
+                    </Link>
+                  </div>
+                </div>
+              )}
+              <HonestyNote>Conversation générée par un moteur de règles déterministe. Elle prouve le workflow applicatif, pas une connexion téléphonique réelle.</HonestyNote>
             </div>
           </Card>
         )}
@@ -190,7 +236,7 @@ export function SimulatorClient() {
                   t.speaker === "agent" ? "rounded-tl-sm bg-scaly-50 text-ink-800 ring-1 ring-scaly-100" : "rounded-tr-sm bg-ink-100 text-ink-800",
                 )}>
                   <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
-                    {t.speaker === "agent" ? "Agent Scaly" : "Appelant"}{t.lang === "en" ? " · EN" : ""}
+                    {t.speaker === "agent" ? "Maude" : "Appelant"}{t.lang === "en" ? " · EN" : ""}
                   </p>
                   {t.text}
                 </div>

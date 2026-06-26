@@ -7,9 +7,10 @@ import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
 import { resolveCompanyId } from "@/server/tenant";
 import { getPersonaById, PERSONAS } from "@/data/personas";
-import { getScriptById, getScriptByIndustry, INDUSTRY_SCRIPTS } from "@/data/industry-scripts";
+import { INDUSTRY_SCRIPTS } from "@/data/industry-scripts";
 import { simulateCall } from "@/services/simulator";
-import { consentFromCall } from "@/services/consent";
+import { runSimulationWorkflow } from "@/services/simulation-workflow";
+import { resolveCompanySimulationScript } from "@/services/simulation-policy";
 import type { Industry } from "@/domain/company";
 import { clientKey, createRateLimiter, tooManyRequests } from "@/lib/rate-limit";
 
@@ -37,17 +38,21 @@ export async function POST(req: Request) {
   }
 
   const store = getStore();
-  const companyId = resolveCompanyId();
+  const companyId = await resolveCompanyId();
   const company = await store.getCompany(companyId);
   const agent = await store.getAgentByCompany(companyId);
   if (!company || !agent) return NextResponse.json({ error: "Compagnie introuvable" }, { status: 500 });
 
-  const script = body.scriptId
-    ? getScriptById(body.scriptId)
-    : getScriptByIndustry(body.industry ?? company.industry);
-  if (!script) {
+  let script;
+  try {
+    script = resolveCompanySimulationScript(company, agent, body.scriptId);
+  } catch (error) {
     return NextResponse.json(
-      { error: `Script introuvable. Scripts valides : ${INDUSTRY_SCRIPTS.map((s) => s.id).join(", ")}` },
+      {
+        error: error instanceof Error ? error.message : "Script invalide",
+        configuredScript: agent.qualificationScriptId,
+        scripts: INDUSTRY_SCRIPTS.map((candidate) => candidate.id),
+      },
       { status: 400 },
     );
   }
@@ -61,15 +66,12 @@ export async function POST(req: Request) {
   }
 
   const seed = Number.isFinite(body.seed) ? Math.abs(Math.floor(body.seed as number)) : Math.floor(Math.random() * 1_000_000);
-  const result = simulateCall({ company, script, persona, seed, agent });
-
-  if (body.persist !== false) {
-    await store.addCall(result.call, result.actions);
-    // Coffre de consentements (ADR-018) — le simulateur alimente le même
-    // registre que les appels réels : la démo montre la vraie mécanique.
-    const consent = consentFromCall(result.call);
-    if (consent) await store.saveConsent(consent);
+  const input = { company, script, persona, seed, agent };
+  if (body.persist === false) {
+    const result = simulateCall(input);
+    return NextResponse.json({ ...result, seed, persisted: false });
   }
 
-  return NextResponse.json({ ...result, seed, persisted: body.persist !== false });
+  const result = await runSimulationWorkflow(store, input);
+  return NextResponse.json({ ...result, seed, persisted: true });
 }

@@ -39,7 +39,7 @@ export function PricingPlans() {
 
   return (
     <div>
-      <div className="grid gap-6 lg:grid-cols-3">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
         {Object.values(PLANS).map((plan) => (
           <div
             key={plan.id}

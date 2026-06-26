@@ -16,10 +16,10 @@ import { formatDateTime } from "@/lib/format";
 
 export const dynamic = "force-dynamic";
 
-export default async function StatusPage({ searchParams }: { searchParams: { live?: string } }) {
+export default async function StatusPage({ searchParams }: { searchParams: Promise<{ live?: string }> }) {
   const store = getStore();
   const info = store.info();
-  const live = searchParams.live === "1" ? await store.verifyLive() : null;
+  const live = (await searchParams).live === "1" ? await store.verifyLive() : null;
   const [companies, calls, actions, audit, voiceSessions] = await Promise.all([
     store.listCompanies(),
     store.listCalls(),
@@ -51,7 +51,7 @@ export default async function StatusPage({ searchParams }: { searchParams: { liv
           </Badge>
           <Link
             href="/status?live=1"
-            className="inline-flex items-center gap-1.5 rounded-lg bg-ink-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-ink-700"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-lg bg-ink-900 px-3 py-2 text-xs font-medium text-white hover:bg-ink-700"
           >
             <RefreshCw size={12} />
             Vérifier en direct
@@ -68,7 +68,7 @@ export default async function StatusPage({ searchParams }: { searchParams: { liv
         </div>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card title="Persistance" subtitle={info.description}>
           <dl className="space-y-3 text-sm">
             <div className="flex items-center justify-between">
@@ -152,7 +152,7 @@ export default async function StatusPage({ searchParams }: { searchParams: { liv
       </div>
 
       <Card title="Pile vocale" subtitle="état honnête des providers — rien n'est « vert » par complaisance" className="mt-6">
-        <ul className="grid gap-2 sm:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {getVoiceStackHealth().map((p) => (
             <li key={p.name} className="flex items-center justify-between gap-3 rounded-lg border border-ink-100 px-3 py-2">
               <div>
@@ -177,7 +177,7 @@ export default async function StatusPage({ searchParams }: { searchParams: { liv
           </Badge>
         }
       >
-        <ul className="grid gap-2 sm:grid-cols-2">
+        <ul className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {voiceReport.checks.map((c) => (
             <li key={c.scenarioId} className="flex items-center justify-between gap-3 rounded-lg border border-ink-100 px-3 py-2">
               <div className="min-w-0">

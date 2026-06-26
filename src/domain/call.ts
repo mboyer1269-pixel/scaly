@@ -103,6 +103,11 @@ export interface Call {
   seed?: number; // seed du simulateur (reproductibilité)
   transcript: TranscriptTurn[];
   intelligence?: CallIntelligence;
+  provenance?: {
+    provider?: string;
+    externalId?: string;
+    verifiedAt?: string;
+  };
   /** HONNÊTETÉ : null tant que l'enregistrement réel (Twilio) n'est pas branché. */
   recordingUrl: null;
 }

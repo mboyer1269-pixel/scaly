@@ -13,19 +13,24 @@ import { ACTION_TYPE_LABELS } from "@/domain/action";
 import { FIELD_LABELS, type FieldKey } from "@/domain/script";
 import { formatCad, formatDateTime, formatDuration } from "@/lib/format";
 import { AnalyzeButton } from "@/components/AnalyzeButton";
+import { deriveCallReality } from "@/services/reality";
+import { RealityBadge } from "@/components/RealityBadge";
 
 export const dynamic = "force-dynamic";
 
-export default async function CallDetailPage({ params }: { params: { id: string } }) {
+export default async function CallDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const store = getStore();
-  const call = await store.getCall(params.id);
+  const { id } = await params;
+  const call = await store.getCall(id);
   // Garde d'appartenance (anti-IDOR) : un appel d'un autre tenant = introuvable, sauf fondateur.
-  if (!call || (call.companyId !== resolveCompanyId() && getSessionRole() !== "founder")) notFound();
+  if (!call || (call.companyId !== await resolveCompanyId() && await getSessionRole() !== "founder")) notFound();
   const actions = await store.listActions(undefined, call.id);
   const intel = call.intelligence;
   const u = urgencyBadge(intel?.urgency);
   const l = leadBadge(intel?.leadQuality);
   const s = callStatusBadge(call.status);
+  const evidence = (await store.listReadinessEvidence(call.companyId)).find((item) => item.callId === call.id);
+  const reality = deriveCallReality(call, store.info(), evidence);
 
   return (
     <>
@@ -40,11 +45,12 @@ export default async function CallDetailPage({ params }: { params: { id: string 
           <Badge tone={s.tone}>{s.label}</Badge>
           <Badge tone={u.tone}>Urgence : {u.label}</Badge>
           <Badge tone={l.tone}>Lead : {l.label}</Badge>
+          <RealityBadge reality={reality} />
           {intel?.saved && <Badge tone="emerald">Appel sauvé ({intel.saved.reason === "hors_heures" ? "hors heures" : "rappel SMS"})</Badge>}
         </div>
       </PageHeader>
 
-      <div className="grid gap-6 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <div className="space-y-6 lg:col-span-3">
           <Card title="Transcript" subtitle={call.source === "simulator" ? `Conversation simulée (seed ${call.seed ?? "—"} · script ${call.scriptId ?? "—"})` : call.source === "seed_curated" ? "Conversation de démonstration rédigée" : "Appel réel"}>
             {call.transcript.length === 0 && (
@@ -58,7 +64,7 @@ export default async function CallDetailPage({ params }: { params: { id: string 
                     t.speaker === "agent" ? "rounded-tl-sm bg-scaly-50 text-ink-800 ring-1 ring-scaly-100" : "rounded-tr-sm bg-ink-100 text-ink-800",
                   )}>
                     <p className="mb-0.5 text-[10px] font-semibold uppercase tracking-wide text-ink-400">
-                      {t.speaker === "agent" ? "Agent Scaly" : "Appelant"} · {Math.round(t.atMs / 1000)} s{t.lang === "en" ? " · EN" : ""}
+                      {t.speaker === "agent" ? "Maude" : "Appelant"} · {Math.round(t.atMs / 1000)} s{t.lang === "en" ? " · EN" : ""}
                     </p>
                     {t.text}
                   </div>
@@ -66,7 +72,7 @@ export default async function CallDetailPage({ params }: { params: { id: string 
               ))}
             </ul>
             {call.recordingUrl === null && (
-              <p className="mt-4 text-xs text-ink-400">Enregistrement audio : aucun (la téléphonie réelle arrive en P2).</p>
+              <p className="mt-4 text-xs text-ink-400">Enregistrement audio : indisponible pour cet appel simulé.</p>
             )}
           </Card>
 
@@ -105,7 +111,7 @@ export default async function CallDetailPage({ params }: { params: { id: string 
 
         <div className="space-y-6 lg:col-span-2">
           <Card
-            title="Call Intelligence"
+            title="Ce que Maude a compris"
             action={
               <span className="inline-flex items-center gap-2">
                 <Badge tone="violet">moteur {intel?.engine ?? "—"}</Badge>

@@ -40,6 +40,7 @@ export interface PilotEnv {
   SCALY_PUBLIC_URL?: string;
   OPENAI_API_KEY?: string;
   CRON_SECRET?: string;
+  SCALY_AUTH_MODE?: string;
 }
 
 export interface PilotFacts {
@@ -79,6 +80,7 @@ export function evaluatePilotReadiness(env: PilotEnv, facts: PilotFacts): PilotR
 
   const isProd = env.NODE_ENV === "production";
   const authEnabled = Boolean(env.NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY && env.CLERK_SECRET_KEY);
+  const authRequired = env.SCALY_AUTH_MODE === "required" || (isProd && env.SCALY_AUTH_MODE !== "demo-open");
   const storeProvider = env.STORE_PROVIDER === "prisma" ? "prisma" : "memory";
   const hasDbUrl = Boolean(env.DATABASE_URL);
   const hasRealtimeSecret = Boolean(env.REALTIME_SHARED_SECRET);
@@ -93,8 +95,8 @@ export function evaluatePilotReadiness(env: PilotEnv, facts: PilotFacts): PilotR
   // 1. Auth ----------------------------------------------------------------
   if (authEnabled) {
     add({ id: "auth", label: "Authentification", status: "pass", detail: "Clerk active — RBAC founder/owner/staff." });
-  } else if (isProd) {
-    add({ id: "auth", label: "Authentification", status: "fail", blocking: true, detail: "NODE_ENV=production mais clés Clerk absentes → app OUVERTE en production." });
+  } else if (authRequired) {
+    add({ id: "auth", label: "Authentification", status: "fail", blocking: true, detail: "Auth requise mais clés Clerk absentes → les surfaces protégées retournent 503 (fail-closed)." });
   } else {
     add({ id: "auth", label: "Authentification", status: "warn", detail: "Désactivée — mode dev/démo ouvert ASSUMÉ (clés Clerk absentes)." });
   }

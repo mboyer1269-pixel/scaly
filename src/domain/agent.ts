@@ -25,6 +25,8 @@ export interface VoiceAgentConfig {
   safetyRules: string[];
   answerLimits: string[];
   transferPolicy: string;
+  /** Consignes exactes approuvées par le propriétaire, sans réécriture silencieuse. */
+  ownerInstructions?: string[];
   voiceProfile: VoiceProfile;
 }
 

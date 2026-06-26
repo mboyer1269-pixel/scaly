@@ -24,10 +24,16 @@ const baseFollowUp = {
   dailyDigestHour: 18,
 };
 
+const baseCoverage = {
+  modes: ["after_hours", "overflow"] as const,
+  overflowDelaySec: 20,
+};
+
 export const SEED_COMPANIES: Company[] = [
   {
     id: DEFAULT_COMPANY_ID,
     name: "Plomberie Bélair",
+    businessDescription: "Plomberie résidentielle et commerciale à Laval, avec couverture d'urgence pour les problèmes actifs.",
     industry: "services_domicile",
     sectorLabel: "Plomberie résidentielle et commerciale",
     ownerName: "Martin Bélair",
@@ -49,6 +55,7 @@ export const SEED_COMPANIES: Company[] = [
     serviceAreas: ["Laval", "Montréal", "Rive-Nord", "Terrebonne", "Boisbriand"],
     policies: ["Frais de déplacement confirmés avant l'envoi du technicien", "Garantie 1 an sur la main-d'œuvre", "Urgences 24/7 pour clients existants"],
     followUp: baseFollowUp,
+    coverage: { modes: [...baseCoverage.modes], overflowDelaySec: baseCoverage.overflowDelaySec },
     compliance: baseCompliance,
     planId: "pro",
     createdAt: "2026-03-12T14:00:00.000Z",
@@ -73,6 +80,7 @@ export const SEED_COMPANIES: Company[] = [
     serviceAreas: ["Rive-Nord", "Laurentides"],
     policies: ["Soumission gratuite", "Licence RBQ affichée sur demande"],
     followUp: baseFollowUp,
+    coverage: { modes: [...baseCoverage.modes], overflowDelaySec: baseCoverage.overflowDelaySec },
     compliance: baseCompliance,
     planId: "premium",
     createdAt: "2026-01-20T14:00:00.000Z",
@@ -97,6 +105,7 @@ export const SEED_COMPANIES: Company[] = [
     serviceAreas: ["Longueuil", "Rive-Sud"],
     policies: ["Aucune réparation sans approbation du client"],
     followUp: baseFollowUp,
+    coverage: { modes: [...baseCoverage.modes], overflowDelaySec: baseCoverage.overflowDelaySec },
     compliance: baseCompliance,
     planId: "starter",
     createdAt: "2026-04-02T14:00:00.000Z",
@@ -121,6 +130,7 @@ export const SEED_COMPANIES: Company[] = [
     serviceAreas: ["Montréal"],
     policies: ["Plages d'urgence réservées chaque jour", "Vérification d'assurance avant RDV"],
     followUp: baseFollowUp,
+    coverage: { modes: [...baseCoverage.modes], overflowDelaySec: baseCoverage.overflowDelaySec },
     compliance: { ...baseCompliance, retentionDays: 180 },
     planId: "pro",
     createdAt: "2026-02-11T14:00:00.000Z",
@@ -145,6 +155,7 @@ export const SEED_COMPANIES: Company[] = [
     serviceAreas: ["Québec", "Lévis", "Sainte-Foy"],
     policies: ["Toute offre en cours est transférée directement au courtier"],
     followUp: baseFollowUp,
+    coverage: { modes: [...baseCoverage.modes], overflowDelaySec: baseCoverage.overflowDelaySec },
     compliance: baseCompliance,
     planId: "pro",
     createdAt: "2026-03-28T14:00:00.000Z",
@@ -169,6 +180,7 @@ export const SEED_COMPANIES: Company[] = [
     serviceAreas: ["Laval", "Rive-Nord", "Montréal"],
     policies: ["Produits écologiques sur demande"],
     followUp: baseFollowUp,
+    coverage: { modes: [...baseCoverage.modes], overflowDelaySec: baseCoverage.overflowDelaySec },
     compliance: baseCompliance,
     planId: "starter",
     createdAt: "2026-05-05T14:00:00.000Z",
@@ -232,12 +244,13 @@ function agentFor(companyId: string, displayName: string, scriptId: string, pers
       "Aucune information sur d'autres clients ou employés.",
     ],
     transferPolicy: "Transfert immédiat si demandé, si urgence critique, ou si plainte non désamorçable. Sinon : prise d'informations + rappel humain.",
+    ownerInstructions: [],
     voiceProfile: { provider: "mock" },
   };
 }
 
 export const SEED_AGENTS: VoiceAgentConfig[] = [
-  agentFor(DEFAULT_COMPANY_ID, "Sophie", "script_domicile", "Chaleureuse, efficace, rassurante. Garde son calme dans les urgences et donne des consignes de sécurité simples."),
+  agentFor(DEFAULT_COMPANY_ID, "Maude", "script_domicile", "Chaleureuse, efficace, rassurante. Garde son calme dans les urgences et donne des consignes de sécurité simples."),
   agentFor("comp_rivnord", "Marc", "script_construction", "Posé et concret. Parle chantier sans jargon inutile."),
   agentFor("comp_mecanoplus", "Léa", "script_garage", "Énergique et directe. Vocabulaire auto simple."),
   agentFor("comp_sourire", "Camille", "script_dentiste", "Douce et patiente. Rassure les patients anxieux."),

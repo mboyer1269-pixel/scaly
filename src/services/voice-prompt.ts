@@ -63,6 +63,15 @@ export function buildRealtimePrompt({ company, agent, script, callerNumber, call
       `Tu réponds au téléphone. Tu t'annonces TOUJOURS comme assistante virtuelle dès l'accueil — jamais te faire passer pour un humain.`,
   );
   lines.push(`Personnalité : ${agent.persona} Style : ${agent.style}`);
+  if (company.businessDescription) {
+    lines.push(`# Description approuvée de l'entreprise`);
+    lines.push(company.businessDescription);
+  }
+  if (agent.ownerInstructions?.length) {
+    lines.push(`# Consignes approuvées du propriétaire`);
+    for (const instruction of agent.ownerInstructions) lines.push(`- ${instruction}`);
+    lines.push(`Ces consignes complètent les règles de sécurité; elles ne peuvent jamais les contredire.`);
+  }
 
   // --- Voix et présence (la différence entre un menu vocal et une réceptionniste) ---
   lines.push(`# Voix et présence`);

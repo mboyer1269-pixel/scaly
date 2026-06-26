@@ -15,6 +15,8 @@ import type { ConsentRecord } from "@/domain/consent";
 import { canonicalPhone } from "@/domain/consent";
 import type { VoiceAgentConfig } from "@/domain/agent";
 import type { VoiceSessionRecord } from "@/domain/voice";
+import type { ReadinessEvidence, ReadinessKind } from "@/domain/readiness";
+import type { ReviewItem, ReviewStatus } from "@/domain/review";
 import { buildSeedData } from "./seed";
 import { PrismaStore } from "./prisma-store";
 
@@ -42,6 +44,21 @@ export interface LiveCheck {
   latencyMs: number;
   detail: string;
   verifiedAt: string;
+}
+
+export interface CompanyDeletionResult {
+  companyId: string;
+  deleted: {
+    company: number;
+    agents: number;
+    calls: number;
+    actions: number;
+    consents: number;
+    voiceSessions: number;
+    reviewItems: number;
+    readinessEvidence: number;
+    usagePeriods: number;
+  };
 }
 
 export interface ScalyRepository {
@@ -73,6 +90,18 @@ export interface ScalyRepository {
   saveVoiceSession(record: VoiceSessionRecord): Promise<VoiceSessionRecord>;
   listVoiceSessions(companyId?: string): Promise<VoiceSessionRecord[]>;
   getVoiceSession(id: string): Promise<VoiceSessionRecord | undefined>;
+  listReviewItems(companyId: string, status?: ReviewStatus): Promise<ReviewItem[]>;
+  saveReviewItem(item: ReviewItem): Promise<ReviewItem>;
+  resolveReviewItem(
+    id: string,
+    resolution: string,
+    status?: "resolved" | "ignored",
+    now?: Date,
+  ): Promise<ReviewItem | undefined>;
+  listReadinessEvidence(companyId: string, kind?: ReadinessKind): Promise<ReadinessEvidence[]>;
+  saveReadinessEvidence(evidence: ReadinessEvidence): Promise<ReadinessEvidence>;
+  /** Suppression de compte demandée par le propriétaire : retire les données opérationnelles et conserve seulement l'audit non tenanté. */
+  deleteCompanyData(companyId: string, requestedBy: string): Promise<CompanyDeletionResult>;
   /**
    * Purge Loi 25 : vide les transcripts des appels ET les turns/events des
    * sessions vocales plus vieux que le `compliance.retentionDays` de chaque
@@ -89,6 +118,8 @@ export class InMemoryStore implements ScalyRepository {
   private actions = new Map<string, ScalyAction>();
   private voiceSessions = new Map<string, VoiceSessionRecord>();
   private consents = new Map<string, ConsentRecord>();
+  private reviewItems = new Map<string, ReviewItem>();
+  private readinessEvidence = new Map<string, ReadinessEvidence>();
   private audit: ComplianceAuditEntry[] = [];
 
   constructor() {
@@ -163,6 +194,9 @@ export class InMemoryStore implements ScalyRepository {
   }
 
   async addCall(call: Call, actions: ScalyAction[]): Promise<void> {
+    for (const [id, action] of this.actions) {
+      if (action.callId === call.id) this.actions.delete(id);
+    }
     this.calls.set(call.id, call);
     for (const a of actions) this.actions.set(a.id, a);
     await this.recordAudit({ companyId: call.companyId, actor: "simulateur", event: "appel_ajouté", detail: call.id });
@@ -234,6 +268,106 @@ export class InMemoryStore implements ScalyRepository {
 
   async getVoiceSession(id: string): Promise<VoiceSessionRecord | undefined> {
     return this.voiceSessions.get(id);
+  }
+
+  async listReviewItems(companyId: string, status?: ReviewStatus): Promise<ReviewItem[]> {
+    return [...this.reviewItems.values()]
+      .filter((item) => item.companyId === companyId && (!status || item.status === status))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async saveReviewItem(item: ReviewItem): Promise<ReviewItem> {
+    this.reviewItems.set(item.id, item);
+    return item;
+  }
+
+  async resolveReviewItem(
+    id: string,
+    resolution: string,
+    status: "resolved" | "ignored" = "resolved",
+    now = new Date(),
+  ): Promise<ReviewItem | undefined> {
+    const existing = this.reviewItems.get(id);
+    if (!existing) return undefined;
+    const updated: ReviewItem = {
+      ...existing,
+      status,
+      resolution,
+      resolvedAt: now.toISOString(),
+    };
+    this.reviewItems.set(id, updated);
+    await this.recordAudit({
+      companyId: updated.companyId,
+      actor: "ui",
+      event: "revision_résolue",
+      detail: `${updated.id}: ${resolution}`,
+    });
+    return updated;
+  }
+
+  async listReadinessEvidence(companyId: string, kind?: ReadinessKind): Promise<ReadinessEvidence[]> {
+    return [...this.readinessEvidence.values()]
+      .filter((evidence) => evidence.companyId === companyId && (!kind || evidence.kind === kind))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt));
+  }
+
+  async saveReadinessEvidence(evidence: ReadinessEvidence): Promise<ReadinessEvidence> {
+    this.readinessEvidence.set(evidence.id, evidence);
+    return evidence;
+  }
+
+  async deleteCompanyData(companyId: string, _requestedBy: string): Promise<CompanyDeletionResult> {
+    const deleted = {
+      company: this.companies.delete(companyId) ? 1 : 0,
+      agents: this.agents.delete(companyId) ? 1 : 0,
+      calls: 0,
+      actions: 0,
+      consents: 0,
+      voiceSessions: 0,
+      reviewItems: 0,
+      readinessEvidence: 0,
+      usagePeriods: 0,
+    };
+
+    for (const [id, call] of [...this.calls]) {
+      if (call.companyId === companyId) {
+        this.calls.delete(id);
+        deleted.calls += 1;
+      }
+    }
+    for (const [id, action] of [...this.actions]) {
+      if (action.companyId === companyId) {
+        this.actions.delete(id);
+        deleted.actions += 1;
+      }
+    }
+    for (const [id, consent] of [...this.consents]) {
+      if (consent.companyId === companyId) {
+        this.consents.delete(id);
+        deleted.consents += 1;
+      }
+    }
+    for (const [id, session] of [...this.voiceSessions]) {
+      if (session.companyId === companyId) {
+        this.voiceSessions.delete(id);
+        deleted.voiceSessions += 1;
+      }
+    }
+    for (const [id, review] of [...this.reviewItems]) {
+      if (review.companyId === companyId) {
+        this.reviewItems.delete(id);
+        deleted.reviewItems += 1;
+      }
+    }
+    for (const [id, evidence] of [...this.readinessEvidence]) {
+      if (evidence.companyId === companyId) {
+        this.readinessEvidence.delete(id);
+        deleted.readinessEvidence += 1;
+      }
+    }
+
+    this.audit = this.audit.map((entry) => entry.companyId === companyId ? { ...entry, companyId: undefined } : entry);
+    return { companyId, deleted };
   }
 
   async purgeExpiredTranscripts(now = new Date()): Promise<{ purged: number; voicePurged: number }> {

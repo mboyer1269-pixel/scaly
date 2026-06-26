@@ -25,7 +25,7 @@ interface VoiceLabBody {
 
 async function buildContext(scriptId: string): Promise<VoiceRuntimeContext | NextResponse> {
   const store = getStore();
-  const companyId = resolveCompanyId();
+  const companyId = await resolveCompanyId();
   const company = await store.getCompany(companyId);
   const agent = await store.getAgentByCompany(companyId);
   if (!company || !agent) return NextResponse.json({ error: "Compagnie introuvable" }, { status: 500 });

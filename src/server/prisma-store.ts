@@ -10,15 +10,19 @@ import type {
   Call as CallRow,
   Action as ActionRow,
   VoiceSession as VoiceSessionRow,
+  ReviewItem as ReviewItemRow,
+  ReadinessEvidence as ReadinessEvidenceRow,
 } from "@prisma/client";
 import type { Call, CallIntelligence, TranscriptTurn } from "@/domain/call";
 import type { VoiceFieldState, VoiceRuntimeEvent, VoiceRuntimeState, VoiceRuntimeTelemetry, VoiceSessionRecord, VoiceTurn } from "@/domain/voice";
 import type { AuditEntry, ScalyAction } from "@/domain/action";
-import type { BusinessHours, Company, CompliancePolicy, EscalationRule, FollowUpPreferences, LanguageCode } from "@/domain/company";
+import type { BusinessHours, Company, CompliancePolicy, CoveragePolicy, EscalationRule, FollowUpPreferences, LanguageCode } from "@/domain/company";
 import type { ConsentRecord } from "@/domain/consent";
+import type { ReadinessEvidence, ReadinessKind } from "@/domain/readiness";
+import type { ReviewItem, ReviewStatus } from "@/domain/review";
 import { canonicalPhone } from "@/domain/consent";
 import type { VoiceAgentConfig, VoiceProfile } from "@/domain/agent";
-import type { ComplianceAuditEntry, LiveCheck, ScalyRepository, StoreInfo } from "./store";
+import type { CompanyDeletionResult, ComplianceAuditEntry, LiveCheck, ScalyRepository, StoreInfo } from "./store";
 import { prisma } from "./prisma";
 
 // ---------------------------------------------------------------------------
@@ -31,6 +35,7 @@ export function companyToDb(c: Company): Prisma.CompanyCreateInput {
   return {
     id: c.id,
     name: c.name,
+    businessDescription: c.businessDescription,
     industry: c.industry,
     sectorLabel: c.sectorLabel,
     ownerName: c.ownerName,
@@ -48,6 +53,7 @@ export function companyToDb(c: Company): Prisma.CompanyCreateInput {
     serviceAreas: c.serviceAreas,
     policies: c.policies,
     followUp: asJson(c.followUp),
+    coverage: c.coverage ? asJson(c.coverage) : Prisma.DbNull,
     compliance: asJson(c.compliance),
     planId: c.planId,
     billing: c.billing ? asJson(c.billing) : Prisma.DbNull,
@@ -59,6 +65,7 @@ export function companyFromDb(row: CompanyRow): Company {
   return {
     id: row.id,
     name: row.name,
+    businessDescription: row.businessDescription ?? undefined,
     industry: row.industry as Company["industry"],
     sectorLabel: row.sectorLabel,
     ownerName: row.ownerName,
@@ -76,6 +83,7 @@ export function companyFromDb(row: CompanyRow): Company {
     serviceAreas: row.serviceAreas,
     policies: row.policies,
     followUp: row.followUp as unknown as FollowUpPreferences,
+    coverage: row.coverage ? (row.coverage as unknown as CoveragePolicy) : undefined,
     compliance: row.compliance as unknown as CompliancePolicy,
     planId: row.planId as Company["planId"],
     billing: row.billing ? (row.billing as unknown as Company["billing"]) : undefined,
@@ -99,6 +107,7 @@ export function agentToDb(a: VoiceAgentConfig): Prisma.VoiceAgentCreateManyInput
     safetyRules: a.safetyRules,
     answerLimits: a.answerLimits,
     transferPolicy: a.transferPolicy,
+    ownerInstructions: a.ownerInstructions ?? [],
     voiceProfile: asJson(a.voiceProfile),
   };
 }
@@ -119,6 +128,7 @@ export function agentFromDb(row: VoiceAgentRow): VoiceAgentConfig {
     safetyRules: row.safetyRules,
     answerLimits: row.answerLimits,
     transferPolicy: row.transferPolicy,
+    ownerInstructions: row.ownerInstructions,
     voiceProfile: row.voiceProfile as unknown as VoiceProfile,
   };
 }
@@ -235,6 +245,35 @@ export function voiceSessionFromDb(row: VoiceSessionRow): VoiceSessionRecord {
   };
 }
 
+export function reviewItemFromDb(row: ReviewItemRow): ReviewItem {
+  return {
+    id: row.id,
+    companyId: row.companyId,
+    callId: row.callId,
+    reason: row.reason as ReviewItem["reason"],
+    evidence: row.evidence,
+    status: row.status as ReviewStatus,
+    resolution: row.resolution ?? undefined,
+    createdAt: row.createdAt.toISOString(),
+    resolvedAt: row.resolvedAt?.toISOString(),
+  };
+}
+
+export function readinessEvidenceFromDb(row: ReadinessEvidenceRow): ReadinessEvidence {
+  return {
+    id: row.id,
+    companyId: row.companyId,
+    kind: row.kind as ReadinessKind,
+    status: row.status as ReadinessEvidence["status"],
+    label: row.label,
+    detail: row.detail,
+    callId: row.callId ?? undefined,
+    externalId: row.externalId ?? undefined,
+    verifiedAt: row.verifiedAt?.toISOString(),
+    createdAt: row.createdAt.toISOString(),
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Store
 // ---------------------------------------------------------------------------
@@ -327,8 +366,10 @@ export class PrismaStore implements ScalyRepository {
   }
 
   async addCall(call: Call, actions: ScalyAction[]): Promise<void> {
+    const data = callToDb(call);
     await prisma.$transaction([
-      prisma.call.create({ data: callToDb(call) }),
+      prisma.action.deleteMany({ where: { callId: call.id } }),
+      prisma.call.upsert({ where: { id: call.id }, create: data, update: data }),
       ...(actions.length ? [prisma.action.createMany({ data: actions.map(actionToDb) })] : []),
     ]);
     await this.recordAudit({ companyId: call.companyId, actor: "simulateur", event: "appel_ajouté", detail: call.id });
@@ -451,6 +492,117 @@ export class PrismaStore implements ScalyRepository {
   async getVoiceSession(id: string): Promise<VoiceSessionRecord | undefined> {
     const row = await prisma.voiceSession.findUnique({ where: { id } });
     return row ? voiceSessionFromDb(row) : undefined;
+  }
+
+  async listReviewItems(companyId: string, status?: ReviewStatus): Promise<ReviewItem[]> {
+    const rows = await prisma.reviewItem.findMany({
+      where: { companyId, ...(status ? { status } : {}) },
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map(reviewItemFromDb);
+  }
+
+  async saveReviewItem(item: ReviewItem): Promise<ReviewItem> {
+    const data = {
+      id: item.id,
+      companyId: item.companyId,
+      callId: item.callId,
+      reason: item.reason,
+      evidence: item.evidence,
+      status: item.status,
+      resolution: item.resolution ?? null,
+      createdAt: new Date(item.createdAt),
+      resolvedAt: item.resolvedAt ? new Date(item.resolvedAt) : null,
+    };
+    await prisma.reviewItem.upsert({ where: { id: item.id }, create: data, update: data });
+    return item;
+  }
+
+  async resolveReviewItem(
+    id: string,
+    resolution: string,
+    status: "resolved" | "ignored" = "resolved",
+    now = new Date(),
+  ): Promise<ReviewItem | undefined> {
+    const existing = await prisma.reviewItem.findUnique({ where: { id } });
+    if (!existing) return undefined;
+    const row = await prisma.reviewItem.update({
+      where: { id },
+      data: { status, resolution, resolvedAt: now },
+    });
+    await this.recordAudit({
+      companyId: row.companyId,
+      actor: "ui",
+      event: "revision_résolue",
+      detail: `${row.id}: ${resolution}`,
+    });
+    return reviewItemFromDb(row);
+  }
+
+  async listReadinessEvidence(companyId: string, kind?: ReadinessKind): Promise<ReadinessEvidence[]> {
+    const rows = await prisma.readinessEvidence.findMany({
+      where: { companyId, ...(kind ? { kind } : {}) },
+      orderBy: { createdAt: "desc" },
+    });
+    return rows.map(readinessEvidenceFromDb);
+  }
+
+  async saveReadinessEvidence(evidence: ReadinessEvidence): Promise<ReadinessEvidence> {
+    const data = {
+      id: evidence.id,
+      companyId: evidence.companyId,
+      kind: evidence.kind,
+      status: evidence.status,
+      label: evidence.label,
+      detail: evidence.detail,
+      callId: evidence.callId ?? null,
+      externalId: evidence.externalId ?? null,
+      verifiedAt: evidence.verifiedAt ? new Date(evidence.verifiedAt) : null,
+      createdAt: new Date(evidence.createdAt),
+    };
+    await prisma.readinessEvidence.upsert({ where: { id: evidence.id }, create: data, update: data });
+    return evidence;
+  }
+
+  async deleteCompanyData(companyId: string, _requestedBy: string): Promise<CompanyDeletionResult> {
+    const [
+      actions,
+      calls,
+      agents,
+      consents,
+      voiceSessions,
+      reviewItems,
+      readinessEvidence,
+      usage,
+      _auditLog,
+      company,
+    ] = await prisma.$transaction([
+      prisma.action.deleteMany({ where: { companyId } }),
+      prisma.call.deleteMany({ where: { companyId } }),
+      prisma.voiceAgent.deleteMany({ where: { companyId } }),
+      prisma.consent.deleteMany({ where: { companyId } }),
+      prisma.voiceSession.deleteMany({ where: { companyId } }),
+      prisma.reviewItem.deleteMany({ where: { companyId } }),
+      prisma.readinessEvidence.deleteMany({ where: { companyId } }),
+      prisma.usagePeriod.deleteMany({ where: { companyId } }),
+      prisma.auditLog.updateMany({ where: { companyId }, data: { companyId: null } }),
+      prisma.company.deleteMany({ where: { id: companyId } }),
+    ]);
+
+    return {
+      companyId,
+      deleted: {
+        company: company.count,
+        agents: agents.count,
+        calls: calls.count,
+        actions: actions.count,
+        consents: consents.count,
+        voiceSessions: voiceSessions.count,
+        reviewItems: reviewItems.count,
+        readinessEvidence: readinessEvidence.count,
+        usagePeriods: usage.count,
+      },
+    };
   }
 
   async purgeExpiredTranscripts(now = new Date()): Promise<{ purged: number; voicePurged: number }> {
