@@ -9,7 +9,7 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   const status = url.searchParams.get("status");
   const callId = url.searchParams.get("callId") ?? undefined;
-  let actions = await getStore().listActions(resolveCompanyId(), callId);
+  let actions = await getStore().listActions(await resolveCompanyId(), callId);
   if (status) actions = actions.filter((a) => a.status === status);
   return NextResponse.json({ actions });
 }

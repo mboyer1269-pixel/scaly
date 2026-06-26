@@ -23,7 +23,7 @@ function formatPhone(p: string): string {
 
 export default async function ConsentsPage() {
   const store = getStore();
-  const consents = await store.listConsents(resolveCompanyId());
+  const consents = await store.listConsents(await resolveCompanyId());
   const active = consents.filter((c) => c.status === "actif").length;
   const revoked = consents.filter((c) => c.status === "revoque").length;
 

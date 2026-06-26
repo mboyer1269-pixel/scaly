@@ -1,4 +1,4 @@
-/** Voice Runtime Lab — banc d'essai du cerveau conversationnel temps réel (P2A). */
+/** Voice Runtime Lab — banc d'essai du cerveau conversationnel. */
 import { PageHeader } from "@/components/ui";
 import { VoiceLabClient } from "@/components/VoiceLabClient";
 
@@ -9,7 +9,7 @@ export default function VoiceLabPage() {
     <>
       <PageHeader
         title="Voice Lab"
-        subtitle="Le cerveau tour par tour de la future voix : machine à états, extraction progressive, bilinguisme, barge-in et budget latence — testé scénario par scénario avant de brancher le téléphone."
+        subtitle="Machine à états, extraction progressive, bilinguisme, interruptions et budget de latence — testés avant toute connexion téléphonique réelle."
       />
       <VoiceLabClient />
     </>

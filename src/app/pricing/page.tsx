@@ -67,7 +67,7 @@ export default function PricingPage() {
               Chaque ligne ci-dessous répond à un irritant documenté chez d'autres services de réception d'appels.
             </p>
           </div>
-          <div className="mx-auto grid max-w-4xl gap-4 sm:grid-cols-2">
+          <div className="mx-auto grid max-w-4xl grid-cols-1 gap-4 sm:grid-cols-2">
             {ENGAGEMENTS.map((e) => (
               <div key={e.t} className="rounded-xl border border-ink-800 bg-ink-900 p-5">
                 <h3 className="font-semibold text-white">{e.t}</h3>
@@ -80,7 +80,7 @@ export default function PricingPage() {
 
       <section className="mx-auto max-w-6xl px-6 py-14">
         <h2 className="text-center text-2xl font-bold">Options</h2>
-        <div className="mx-auto mt-6 grid max-w-4xl gap-4 sm:grid-cols-3">
+        <div className="mx-auto mt-6 grid max-w-4xl grid-cols-1 gap-4 sm:grid-cols-3">
           {ADD_ONS.map((a) => (
             <div key={a.id} className="rounded-xl border border-ink-800 bg-ink-900 p-5 text-center">
               <h3 className="text-sm font-semibold text-white">{a.label}</h3>

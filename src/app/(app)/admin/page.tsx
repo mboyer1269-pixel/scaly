@@ -24,7 +24,7 @@ export default async function AdminPage() {
         </HonestyNote>
       </div>
 
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Stat label="MRR (démo)" value={formatCad(o.mrrCad)} sub={`${o.rows.length} clients actifs`} />
         <Stat label="Minutes (14 j)" value={String(o.totalMinutes)} sub="toutes compagnies" />
         <Stat label="Coût IA estimé (14 j)" value={formatCad(o.totalAiCostCad)} sub="modèle interne" />
@@ -67,7 +67,7 @@ export default async function AdminPage() {
         </div>
       </Card>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <Card title="Santé des providers vocaux" subtitle="état honnête — rien n'est « vert » par complaisance">
           <ul className="space-y-2">
             {o.providerHealth.map((p) => (
@@ -99,7 +99,7 @@ export default async function AdminPage() {
         </Card>
       </div>
 
-      <div className="mt-6 grid gap-6 lg:grid-cols-3">
+      <div className="mt-6 grid grid-cols-1 gap-6 lg:grid-cols-3">
         {Object.values(PLANS).map((p) => (
           <Card key={p.id} title={`Plan ${p.label}`} subtitle={`${formatCad(p.priceMonthlyCad)}/mois · ${p.includedMinutes} min incluses · ${p.overagePerMinuteCad.toFixed(2)} $/min excéd. · installation ${formatCad(p.setupFeeCad)}`}>
             <ul className="list-inside list-disc space-y-1 text-xs text-ink-600">
@@ -110,7 +110,7 @@ export default async function AdminPage() {
       </div>
 
       <Card title="Add-ons" className="mt-6">
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           {ADD_ONS.map((a) => (
             <div key={a.id} className="rounded-lg border border-ink-100 px-4 py-3">
               <p className="text-sm font-semibold text-ink-900">{a.label}</p>

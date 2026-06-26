@@ -18,11 +18,12 @@ import { RealityBadge } from "@/components/RealityBadge";
 
 export const dynamic = "force-dynamic";
 
-export default async function CallDetailPage({ params }: { params: { id: string } }) {
+export default async function CallDetailPage({ params }: { params: Promise<{ id: string }> }) {
   const store = getStore();
-  const call = await store.getCall(params.id);
+  const { id } = await params;
+  const call = await store.getCall(id);
   // Garde d'appartenance (anti-IDOR) : un appel d'un autre tenant = introuvable, sauf fondateur.
-  if (!call || (call.companyId !== resolveCompanyId() && getSessionRole() !== "founder")) notFound();
+  if (!call || (call.companyId !== await resolveCompanyId() && await getSessionRole() !== "founder")) notFound();
   const actions = await store.listActions(undefined, call.id);
   const intel = call.intelligence;
   const u = urgencyBadge(intel?.urgency);
@@ -49,7 +50,7 @@ export default async function CallDetailPage({ params }: { params: { id: string 
         </div>
       </PageHeader>
 
-      <div className="grid gap-6 lg:grid-cols-5">
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-5">
         <div className="space-y-6 lg:col-span-3">
           <Card title="Transcript" subtitle={call.source === "simulator" ? `Conversation simulée (seed ${call.seed ?? "—"} · script ${call.scriptId ?? "—"})` : call.source === "seed_curated" ? "Conversation de démonstration rédigée" : "Appel réel"}>
             {call.transcript.length === 0 && (
@@ -71,7 +72,7 @@ export default async function CallDetailPage({ params }: { params: { id: string 
               ))}
             </ul>
             {call.recordingUrl === null && (
-              <p className="mt-4 text-xs text-ink-400">Enregistrement audio : aucun (la téléphonie réelle arrive en P2).</p>
+              <p className="mt-4 text-xs text-ink-400">Enregistrement audio : indisponible pour cet appel simulé.</p>
             )}
           </Card>
 

@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
 import { resolveCompanyId } from "@/server/tenant";
 
-export async function PUT(req: Request, { params }: { params: { id: string } }) {
-  const companyId = resolveCompanyId();
+export async function PUT(req: Request, { params }: { params: Promise<{ id: string }> }) {
+  const companyId = await resolveCompanyId();
   const store = getStore();
-  const item = (await store.listReviewItems(companyId)).find((candidate) => candidate.id === params.id);
+  const { id } = await params;
+  const item = (await store.listReviewItems(companyId)).find((candidate) => candidate.id === id);
   if (!item) return NextResponse.json({ error: "Révision introuvable." }, { status: 404 });
 
   let body: { status?: string; resolution?: string };

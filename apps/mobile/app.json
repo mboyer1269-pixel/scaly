@@ -1,0 +1,38 @@
+{
+  "expo": {
+    "name": "Allô Maude",
+    "slug": "allo-maude",
+    "scheme": "allomaude",
+    "version": "0.1.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "automatic",
+    "splash": {
+      "backgroundColor": "#0f172a"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "ca.allomaude.mobile",
+      "infoPlist": {
+        "NSUserNotificationsUsageDescription": "Allô Maude vous avertit lorsqu'un appel urgent ou une action importante demande votre attention."
+      }
+    },
+    "android": {
+      "package": "ca.allomaude.mobile",
+      "permissions": [
+        "POST_NOTIFICATIONS"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#0f172a"
+      }
+    },
+    "plugins": [
+      "expo-router",
+      "expo-notifications"
+    ],
+    "extra": {
+      "router": {
+        "origin": false
+      }
+    }
+  }
+}

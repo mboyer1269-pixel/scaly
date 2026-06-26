@@ -4,6 +4,7 @@ import { useState } from "react";
 import { Check, Loader2, Save } from "lucide-react";
 import type { CoverageMode, CoveragePolicy } from "@/domain/company";
 import { DEFAULT_COVERAGE_POLICY } from "@/services/coverage";
+import { FIELD_LABEL_CLASS, FormNotice } from "@/components/ui";
 
 const MODES: Array<{
   id: CoverageMode;
@@ -61,7 +62,7 @@ export function CoverageForm({ coverage }: { coverage?: CoveragePolicy }) {
 
   return (
     <div className="space-y-5">
-      <div className="grid gap-3 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
         {MODES.map((mode) => {
           const selected = modes.includes(mode.id);
           return (
@@ -94,18 +95,21 @@ export function CoverageForm({ coverage }: { coverage?: CoveragePolicy }) {
 
       {modes.includes("overflow") && (
         <label className="block max-w-sm">
-          <span className="mb-1 block text-xs font-semibold uppercase tracking-wide text-ink-500">
+          <span className={FIELD_LABEL_CLASS}>
             Délai avant prise en charge
           </span>
           <div className="flex items-center gap-3">
             <input
+              id="coverage-overflow-delay"
+              name="overflowDelaySec"
               type="range"
+              aria-label="Délai avant prise en charge"
               min={5}
               max={120}
               step={5}
               value={overflowDelaySec}
               onChange={(event) => setOverflowDelaySec(Number(event.target.value))}
-              className="w-full accent-scaly-600"
+              className="h-11 w-full accent-scaly-600"
             />
             <span className="w-20 rounded-lg bg-ink-100 px-3 py-2 text-center text-sm font-semibold text-ink-800">
               {overflowDelaySec} s
@@ -115,18 +119,14 @@ export function CoverageForm({ coverage }: { coverage?: CoveragePolicy }) {
       )}
 
       {message && (
-        <p className={`rounded-lg px-3 py-2 text-sm ${
-          message.startsWith("Couverture") ? "bg-emerald-50 text-emerald-800" : "bg-rose-50 text-rose-800"
-        }`}>
-          {message}
-        </p>
+        <FormNotice tone={message.startsWith("Couverture") ? "success" : "error"}>{message}</FormNotice>
       )}
 
       <button
         type="button"
         onClick={save}
         disabled={saving || modes.length === 0}
-        className="inline-flex items-center gap-2 rounded-lg bg-scaly-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-scaly-800 disabled:cursor-not-allowed disabled:opacity-50"
+        className="inline-flex min-h-11 items-center gap-2 rounded-lg bg-scaly-700 px-4 py-2.5 text-sm font-semibold text-white hover:bg-scaly-800 disabled:cursor-not-allowed disabled:opacity-50"
       >
         {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
         Sauvegarder la couverture

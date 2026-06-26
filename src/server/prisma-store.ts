@@ -22,7 +22,7 @@ import type { ReadinessEvidence, ReadinessKind } from "@/domain/readiness";
 import type { ReviewItem, ReviewStatus } from "@/domain/review";
 import { canonicalPhone } from "@/domain/consent";
 import type { VoiceAgentConfig, VoiceProfile } from "@/domain/agent";
-import type { ComplianceAuditEntry, LiveCheck, ScalyRepository, StoreInfo } from "./store";
+import type { CompanyDeletionResult, ComplianceAuditEntry, LiveCheck, ScalyRepository, StoreInfo } from "./store";
 import { prisma } from "./prisma";
 
 // ---------------------------------------------------------------------------
@@ -35,6 +35,7 @@ export function companyToDb(c: Company): Prisma.CompanyCreateInput {
   return {
     id: c.id,
     name: c.name,
+    businessDescription: c.businessDescription,
     industry: c.industry,
     sectorLabel: c.sectorLabel,
     ownerName: c.ownerName,
@@ -64,6 +65,7 @@ export function companyFromDb(row: CompanyRow): Company {
   return {
     id: row.id,
     name: row.name,
+    businessDescription: row.businessDescription ?? undefined,
     industry: row.industry as Company["industry"],
     sectorLabel: row.sectorLabel,
     ownerName: row.ownerName,
@@ -105,6 +107,7 @@ export function agentToDb(a: VoiceAgentConfig): Prisma.VoiceAgentCreateManyInput
     safetyRules: a.safetyRules,
     answerLimits: a.answerLimits,
     transferPolicy: a.transferPolicy,
+    ownerInstructions: a.ownerInstructions ?? [],
     voiceProfile: asJson(a.voiceProfile),
   };
 }
@@ -125,6 +128,7 @@ export function agentFromDb(row: VoiceAgentRow): VoiceAgentConfig {
     safetyRules: row.safetyRules,
     answerLimits: row.answerLimits,
     transferPolicy: row.transferPolicy,
+    ownerInstructions: row.ownerInstructions,
     voiceProfile: row.voiceProfile as unknown as VoiceProfile,
   };
 }
@@ -362,8 +366,10 @@ export class PrismaStore implements ScalyRepository {
   }
 
   async addCall(call: Call, actions: ScalyAction[]): Promise<void> {
+    const data = callToDb(call);
     await prisma.$transaction([
-      prisma.call.create({ data: callToDb(call) }),
+      prisma.action.deleteMany({ where: { callId: call.id } }),
+      prisma.call.upsert({ where: { id: call.id }, create: data, update: data }),
       ...(actions.length ? [prisma.action.createMany({ data: actions.map(actionToDb) })] : []),
     ]);
     await this.recordAudit({ companyId: call.companyId, actor: "simulateur", event: "appel_ajouté", detail: call.id });
@@ -556,6 +562,47 @@ export class PrismaStore implements ScalyRepository {
     };
     await prisma.readinessEvidence.upsert({ where: { id: evidence.id }, create: data, update: data });
     return evidence;
+  }
+
+  async deleteCompanyData(companyId: string, _requestedBy: string): Promise<CompanyDeletionResult> {
+    const [
+      actions,
+      calls,
+      agents,
+      consents,
+      voiceSessions,
+      reviewItems,
+      readinessEvidence,
+      usage,
+      _auditLog,
+      company,
+    ] = await prisma.$transaction([
+      prisma.action.deleteMany({ where: { companyId } }),
+      prisma.call.deleteMany({ where: { companyId } }),
+      prisma.voiceAgent.deleteMany({ where: { companyId } }),
+      prisma.consent.deleteMany({ where: { companyId } }),
+      prisma.voiceSession.deleteMany({ where: { companyId } }),
+      prisma.reviewItem.deleteMany({ where: { companyId } }),
+      prisma.readinessEvidence.deleteMany({ where: { companyId } }),
+      prisma.usagePeriod.deleteMany({ where: { companyId } }),
+      prisma.auditLog.updateMany({ where: { companyId }, data: { companyId: null } }),
+      prisma.company.deleteMany({ where: { id: companyId } }),
+    ]);
+
+    return {
+      companyId,
+      deleted: {
+        company: company.count,
+        agents: agents.count,
+        calls: calls.count,
+        actions: actions.count,
+        consents: consents.count,
+        voiceSessions: voiceSessions.count,
+        reviewItems: reviewItems.count,
+        readinessEvidence: readinessEvidence.count,
+        usagePeriods: usage.count,
+      },
+    };
   }
 
   async purgeExpiredTranscripts(now = new Date()): Promise<{ purged: number; voicePurged: number }> {

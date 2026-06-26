@@ -46,7 +46,7 @@ export default async function LiveReadinessPage() {
         {report.singleTenantOnly && <p className="mt-2 text-sm font-semibold text-amber-700">Pilote mono-tenant seulement.</p>}
       </Card>
 
-      <div className="mt-6 grid gap-4 lg:grid-cols-2">
+      <div className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
         {report.checks.map((check) => (
           <Card key={check.id} title={check.label}>
             <div className="flex items-start justify-between gap-3">

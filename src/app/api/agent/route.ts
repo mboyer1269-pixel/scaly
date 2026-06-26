@@ -3,25 +3,42 @@ import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
 import { resolveCompanyId } from "@/server/tenant";
 import type { VoiceAgentConfig } from "@/domain/agent";
+import { isJsonObject, pickJsonFields } from "@/lib/request-body";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const agent = await getStore().getAgentByCompany(resolveCompanyId());
+  const agent = await getStore().getAgentByCompany(await resolveCompanyId());
   if (!agent) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   return NextResponse.json({ agent });
 }
 
 export async function PUT(req: Request) {
-  let patch: Partial<VoiceAgentConfig>;
+  let body: unknown;
   try {
-    patch = (await req.json()) as Partial<VoiceAgentConfig>;
+    body = await req.json();
   } catch {
     return NextResponse.json({ error: "Corps JSON invalide" }, { status: 400 });
   }
-  delete (patch as Record<string, unknown>).id;
-  delete (patch as Record<string, unknown>).companyId;
-  const agent = await getStore().updateAgent(resolveCompanyId(), patch);
+  if (!isJsonObject(body)) {
+    return NextResponse.json({ error: "Un objet JSON est requis" }, { status: 400 });
+  }
+  const patch = pickJsonFields<VoiceAgentConfig>(body, [
+    "displayName",
+    "persona",
+    "style",
+    "languages",
+    "greetingScript",
+    "closingScript",
+    "allowedPhrases",
+    "forbiddenPhrases",
+    "safetyRules",
+    "answerLimits",
+    "transferPolicy",
+    "ownerInstructions",
+    "voiceProfile",
+  ]);
+  const agent = await getStore().updateAgent(await resolveCompanyId(), patch);
   if (!agent) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   return NextResponse.json({ agent });
 }

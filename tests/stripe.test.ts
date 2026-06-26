@@ -4,6 +4,7 @@ import {
   buildCheckoutParams,
   interpretStripeEvent,
   mergeBilling,
+  resolveCheckoutOrigin,
   verifyStripeSignature,
   type StripeEvent,
 } from "@/adapters/integrations/stripe";
@@ -36,6 +37,13 @@ describe("verifyStripeSignature", () => {
 });
 
 describe("buildCheckoutParams", () => {
+  it("ne fait pas confiance à un Origin hostile pour les URLs de retour Stripe", () => {
+    expect(resolveCheckoutOrigin("https://app.allomaude.ca/api/billing/checkout", "https://evil.example", {})).toBe("https://app.allomaude.ca");
+    expect(resolveCheckoutOrigin("http://localhost:3000/api/billing/checkout", "https://evil.example", {
+      SCALY_PUBLIC_URL: "https://app.allomaude.ca/",
+    })).toBe("https://app.allomaude.ca");
+  });
+
   it("construit l'abonnement mensuel en cents CAD avec frais d'installation", () => {
     const p = buildCheckoutParams("starter", "comp_belair", "https://scaly.ca");
     expect(p.get("mode")).toBe("subscription");
@@ -43,6 +51,10 @@ describe("buildCheckoutParams", () => {
     expect(p.get("line_items[0][price_data][recurring][interval]")).toBe("month");
     expect(p.get("line_items[1][price_data][unit_amount]")).toBe(String(PLANS.starter.setupFeeCad * 100));
     expect(p.get("line_items[1][price_data][recurring][interval]")).toBeNull(); // frais une fois, pas récurrents
+    expect(p.get("line_items[0][price_data][product_data][name]")).toContain("Allô Maude");
+    expect(p.get("line_items[0][price_data][product_data][name]")).not.toContain("Scaly");
+    expect(p.get("line_items[1][price_data][product_data][name]")).toContain("Allô Maude");
+    expect(p.get("line_items[1][price_data][product_data][name]")).not.toContain("Scaly");
     expect(p.get("metadata[planId]")).toBe("starter");
     expect(p.get("success_url")).toBe("https://scaly.ca/settings?billing=success");
   });

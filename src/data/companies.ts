@@ -33,6 +33,7 @@ export const SEED_COMPANIES: Company[] = [
   {
     id: DEFAULT_COMPANY_ID,
     name: "Plomberie Bélair",
+    businessDescription: "Plomberie résidentielle et commerciale à Laval, avec couverture d'urgence pour les problèmes actifs.",
     industry: "services_domicile",
     sectorLabel: "Plomberie résidentielle et commerciale",
     ownerName: "Martin Bélair",
@@ -243,6 +244,7 @@ function agentFor(companyId: string, displayName: string, scriptId: string, pers
       "Aucune information sur d'autres clients ou employés.",
     ],
     transferPolicy: "Transfert immédiat si demandé, si urgence critique, ou si plainte non désamorçable. Sinon : prise d'informations + rappel humain.",
+    ownerInstructions: [],
     voiceProfile: { provider: "mock" },
   };
 }

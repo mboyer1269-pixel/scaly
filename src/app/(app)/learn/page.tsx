@@ -19,7 +19,7 @@ const REASONS = {
 
 export default async function LearnPage() {
   const store = getStore();
-  const companyId = resolveCompanyId();
+  const companyId = await resolveCompanyId();
   const [open, resolved] = await Promise.all([
     store.listReviewItems(companyId, "open"),
     store.listReviewItems(companyId, "resolved"),

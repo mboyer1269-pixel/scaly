@@ -1,6 +1,6 @@
 # Allô Maude — Launch Readiness Report
 
-Date d’exécution : 25 juin 2026  
+Date d’exécution : 26 juin 2026
 Branche : `codex/allo-maude-vertical-slice`
 
 ## Verdict
@@ -11,8 +11,10 @@ Branche : `codex/allo-maude-vertical-slice`
 | Application locale sans démo | **UTILISABLE** | Préparation, couverture, réglages, appels, suivis, révisions et readiness sont accessibles indépendamment du simulateur. |
 | Aperçu commercial persistant | **NOT READY** | Le mode mémoire est éphémère; l’aller-retour PostgreSQL n’a pas réussi. |
 | Premier appel téléphonique réel | **NOT READY** | `pilot:check` échoue sur PostgreSQL inaccessible à `localhost:5432`; le transport IA temps réel reste non configuré. |
+| Structure mobile pilote interne | **READY** | Expo, API mobile versionnée, confidentialité, deep links et metadata stores sont présents. |
+| Soumission App Store / Google Play | **NOT READY** | Auth mobile native par utilisateur absente; audit Expo contient encore des vulnérabilités modérées transitives. |
 
-Aucun défaut critique connu n’a été observé dans la tranche testée. Ce verdict ne prétend pas que les fournisseurs externes ou un appel téléphonique réel ont été validés.
+Aucun défaut critique connu n’a été observé dans la tranche testée après correction des problèmes listés plus bas. Ce verdict ne prétend pas que les fournisseurs externes, les stores mobiles ou un appel téléphonique réel ont été validés.
 
 ## Preuve verticale exécutée
 
@@ -43,13 +45,15 @@ La sauvegarde de la politique de couverture a également été exécutée depuis
 | Commande | Résultat |
 |---|---|
 | `npm run typecheck` | PASS |
-| `npm test` | PASS — 30 fichiers, 234 tests |
-| `npm run build` | PASS — 24 pages générées, route `/allo-maude` incluse |
+| `npm test -- --reporter=dot` | PASS — 34 fichiers, 258 tests |
+| `npm run build` | PASS — build Next.js complet |
 | `npm run demo:check` | PASS local; aperçu commercial refusé en mémoire |
+| `npm run mobile:check` | PASS structure mobile; stores refusés honnêtement |
+| `npm --prefix apps/mobile run typecheck` | PASS |
+| `npm audit --json` | PASS — 0 vulnérabilité racine |
+| `npm --prefix apps/mobile audit --json` | FAIL — 10 vulnérabilités modérées Expo transitives |
 | `npm run pilot:check` | FAIL attendu et bloquant — PostgreSQL inaccessible à `localhost:5432` |
-| `npm run app:local -- --port 3017` | PASS — HTTP 200 sur `/allo-maude` |
-
-Le premier typecheck lancé en parallèle du build a rencontré une course sur `.next/types`. Il a été rejoué séquentiellement après le build et a réussi.
+| Smoke HTTP local `127.0.0.1:3017` | PASS — 14 routes/API principales en HTTP 200 |
 
 ## Vérification navigateur
 
@@ -64,15 +68,30 @@ Routes inspectées sur `http://127.0.0.1:3017` :
 - `/dashboard`
 - `/readiness/demo`
 - `/readiness/live`
+- `/readiness/mobile`
+- `/privacy`
+- `/onboarding`
+- `/api/health`
+- `/api/mobile/v1/overview`
 
 Résultat :
 
 - contraste et contenu lisibles sur la page publique;
 - frontière de marque Allô Maude respectée;
 - Scaly limité au contexte technique;
-- aucune erreur console détectée;
+- aucun échec HTTP détecté sur les routes fumées;
 - navigation vers les preuves persistées fonctionnelle;
-- readiness démo et readiness appels réels séparés.
+- readiness démo, readiness appels réels et readiness mobile séparés.
+
+## Corrections appliquées pendant l’audit
+
+- Anti-IDOR ajouté sur `/api/voice-lab/save` : une session forgée ne peut plus être sauvegardée dans un autre tenant, sauf rôle `founder`.
+- Politique mobile fail-closed en production : les routes mobiles exigent `MOBILE_API_BEARER_TOKEN`, même si le web est en `SCALY_AUTH_MODE=demo-open`, sauf ouverture explicite `SCALY_MOBILE_AUTH_MODE=demo-open`.
+- Readiness mobile séparée : structure pilote interne `READY`, soumission stores `NOT READY` tant que l’auth native utilisateur n’est pas branchée.
+- Suppression de compte corrigée : les compteurs `readinessEvidence` et `usagePeriods` sont séparés; suppression Prisma intégrée dans une transaction unique.
+- Garde SSRF onboarding durcie contre les IPv4 mappées IPv6 (`::ffff:127.0.0.1`) et les IPv6 littérales.
+- Checkout Stripe durci : URLs de retour dérivées de `SCALY_PUBLIC_URL` ou de l’URL serveur, pas d’un header `Origin` hostile.
+- Frontière de marque corrigée dans Stripe : les noms produits visibles client utilisent Allô Maude, pas Scaly.
 
 ## Blocages avant un pilote réel
 
@@ -82,6 +101,8 @@ Résultat :
 4. Implémenter le mapping numéro Twilio → `companyId` avant un deuxième client.
 5. Configurer `CRON_SECRET` pour automatiser la purge Loi 25.
 6. Exécuter un appel réel bout en bout et enregistrer sa preuve externe avant d’utiliser le statut `Vérifié`.
+7. Remplacer le bearer mobile partagé par une authentification native par utilisateur avant soumission App Store / Google Play.
+8. Résoudre les 10 vulnérabilités modérées transitives Expo avant dépôt stores.
 
 ## Commande de lancement
 

@@ -89,6 +89,8 @@ export interface CompanyBilling {
 export interface Company {
   id: string;
   name: string;
+  /** Description approuvée du commerce, utilisée comme contexte par Maude. */
+  businessDescription?: string;
   industry: Industry;
   sectorLabel: string;
   ownerName: string;

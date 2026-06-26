@@ -33,7 +33,7 @@ export default function ScriptsPage() {
                   <Badge tone="teal">{s.crmTags[0]}</Badge>
                 </div>
               </summary>
-              <div className="mt-4 grid gap-5 border-t border-ink-100 pt-4 text-sm lg:grid-cols-2">
+              <div className="mt-4 grid grid-cols-1 gap-5 border-t border-ink-100 pt-4 text-sm lg:grid-cols-2">
                 <div className="space-y-4">
                   <div>
                     <p className="mb-1 text-xs font-semibold uppercase tracking-wide text-ink-400">Accueil (FR)</p>

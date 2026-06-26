@@ -46,6 +46,21 @@ export interface LiveCheck {
   verifiedAt: string;
 }
 
+export interface CompanyDeletionResult {
+  companyId: string;
+  deleted: {
+    company: number;
+    agents: number;
+    calls: number;
+    actions: number;
+    consents: number;
+    voiceSessions: number;
+    reviewItems: number;
+    readinessEvidence: number;
+    usagePeriods: number;
+  };
+}
+
 export interface ScalyRepository {
   info(): StoreInfo;
   /** Preuve d'aller-retour réel (lecture + écriture). Jamais « vert » par complaisance. */
@@ -85,6 +100,8 @@ export interface ScalyRepository {
   ): Promise<ReviewItem | undefined>;
   listReadinessEvidence(companyId: string, kind?: ReadinessKind): Promise<ReadinessEvidence[]>;
   saveReadinessEvidence(evidence: ReadinessEvidence): Promise<ReadinessEvidence>;
+  /** Suppression de compte demandée par le propriétaire : retire les données opérationnelles et conserve seulement l'audit non tenanté. */
+  deleteCompanyData(companyId: string, requestedBy: string): Promise<CompanyDeletionResult>;
   /**
    * Purge Loi 25 : vide les transcripts des appels ET les turns/events des
    * sessions vocales plus vieux que le `compliance.retentionDays` de chaque
@@ -177,6 +194,9 @@ export class InMemoryStore implements ScalyRepository {
   }
 
   async addCall(call: Call, actions: ScalyAction[]): Promise<void> {
+    for (const [id, action] of this.actions) {
+      if (action.callId === call.id) this.actions.delete(id);
+    }
     this.calls.set(call.id, call);
     for (const a of actions) this.actions.set(a.id, a);
     await this.recordAudit({ companyId: call.companyId, actor: "simulateur", event: "appel_ajouté", detail: call.id });
@@ -294,6 +314,60 @@ export class InMemoryStore implements ScalyRepository {
   async saveReadinessEvidence(evidence: ReadinessEvidence): Promise<ReadinessEvidence> {
     this.readinessEvidence.set(evidence.id, evidence);
     return evidence;
+  }
+
+  async deleteCompanyData(companyId: string, _requestedBy: string): Promise<CompanyDeletionResult> {
+    const deleted = {
+      company: this.companies.delete(companyId) ? 1 : 0,
+      agents: this.agents.delete(companyId) ? 1 : 0,
+      calls: 0,
+      actions: 0,
+      consents: 0,
+      voiceSessions: 0,
+      reviewItems: 0,
+      readinessEvidence: 0,
+      usagePeriods: 0,
+    };
+
+    for (const [id, call] of [...this.calls]) {
+      if (call.companyId === companyId) {
+        this.calls.delete(id);
+        deleted.calls += 1;
+      }
+    }
+    for (const [id, action] of [...this.actions]) {
+      if (action.companyId === companyId) {
+        this.actions.delete(id);
+        deleted.actions += 1;
+      }
+    }
+    for (const [id, consent] of [...this.consents]) {
+      if (consent.companyId === companyId) {
+        this.consents.delete(id);
+        deleted.consents += 1;
+      }
+    }
+    for (const [id, session] of [...this.voiceSessions]) {
+      if (session.companyId === companyId) {
+        this.voiceSessions.delete(id);
+        deleted.voiceSessions += 1;
+      }
+    }
+    for (const [id, review] of [...this.reviewItems]) {
+      if (review.companyId === companyId) {
+        this.reviewItems.delete(id);
+        deleted.reviewItems += 1;
+      }
+    }
+    for (const [id, evidence] of [...this.readinessEvidence]) {
+      if (evidence.companyId === companyId) {
+        this.readinessEvidence.delete(id);
+        deleted.readinessEvidence += 1;
+      }
+    }
+
+    this.audit = this.audit.map((entry) => entry.companyId === companyId ? { ...entry, companyId: undefined } : entry);
+    return { companyId, deleted };
   }
 
   async purgeExpiredTranscripts(now = new Date()): Promise<{ purged: number; voicePurged: number }> {

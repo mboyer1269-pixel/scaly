@@ -61,7 +61,7 @@ export function simulateCall(input: SimulationInput): SimulationResult {
   const interpolate = (s: string) => s.replace(/\{company\}/g, company.name).replace(/\{agent\}/g, agent.displayName);
 
   // --- Accueil ---
-  push("agent", interpolate(script.greeting));
+  push("agent", interpolate(agent.greetingScript));
   push("caller", pick(rng, persona.openers).replace(/\{service\}/g, need), callerLang);
 
   const collected: Record<string, string> = {};

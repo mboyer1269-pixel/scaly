@@ -18,6 +18,7 @@ datasource db {
 model Company {
   id              String   @id
   name            String
+  businessDescription String?
   industry        String
   sectorLabel     String
   ownerName       String
@@ -85,6 +86,7 @@ model VoiceAgent {
   safetyRules            String[]
   answerLimits           String[]
   transferPolicy         String
+  ownerInstructions      String[] @default([])
   voiceProfile           Json
 
   company Company @relation(fields: [companyId], references: [id])

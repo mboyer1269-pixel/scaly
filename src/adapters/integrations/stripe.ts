@@ -28,6 +28,16 @@ export function stripeConfigHint(): string {
     : "Stripe non configuré — variable STRIPE_SECRET_KEY manquante (le paiement en ligne reste inactif).";
 }
 
+export function resolveCheckoutOrigin(
+  requestUrl: string,
+  _originHeader: string | null,
+  env: Record<string, string | undefined> = process.env,
+): string {
+  const configured = env["SCALY_PUBLIC_URL"]?.trim();
+  if (configured) return new URL(configured).origin;
+  return new URL(requestUrl).origin;
+}
+
 // ---------------------------------------------------------------------------
 // Checkout — paramètres construits depuis domain/billing (pur, testé)
 // ---------------------------------------------------------------------------
@@ -51,14 +61,14 @@ export function buildCheckoutParams(planId: PlanId, companyId: string, origin: s
   p.set("line_items[0][price_data][currency]", "cad");
   p.set("line_items[0][price_data][unit_amount]", String(plan.priceMonthlyCad * 100));
   p.set("line_items[0][price_data][recurring][interval]", "month");
-  p.set("line_items[0][price_data][product_data][name]", `Scaly ${plan.label} — ${plan.includedMinutes} min/mois`);
+  p.set("line_items[0][price_data][product_data][name]", `Allô Maude ${plan.label} — ${plan.includedMinutes} min/mois`);
 
   // Frais d'installation — article unique, seulement si le plan en a.
   if (plan.setupFeeCad > 0) {
     p.set("line_items[1][quantity]", "1");
     p.set("line_items[1][price_data][currency]", "cad");
     p.set("line_items[1][price_data][unit_amount]", String(plan.setupFeeCad * 100));
-    p.set("line_items[1][price_data][product_data][name]", "Scaly — installation et configuration (une fois)");
+    p.set("line_items[1][price_data][product_data][name]", "Allô Maude — installation et configuration (une fois)");
   }
   return p;
 }

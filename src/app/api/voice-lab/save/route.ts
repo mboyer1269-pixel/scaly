@@ -8,8 +8,11 @@
  */
 import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
+import { getSessionRole } from "@/server/auth";
+import { resolveCompanyId } from "@/server/tenant";
 import { getScriptById } from "@/data/industry-scripts";
 import { voiceSessionToCall, voiceSessionToRecord } from "@/services/voice-convert";
+import { canSaveVoiceLabSessionForTenant } from "@/services/voice-lab-security";
 import type { VoiceSession } from "@/domain/voice";
 
 export const dynamic = "force-dynamic";
@@ -29,6 +32,11 @@ export async function POST(req: Request) {
   }
 
   const store = getStore();
+  const [currentCompanyId, role] = await Promise.all([resolveCompanyId(), getSessionRole()]);
+  if (!canSaveVoiceLabSessionForTenant(session.companyId, currentCompanyId, role)) {
+    return NextResponse.json({ error: "Session introuvable" }, { status: 404 });
+  }
+
   const company = await store.getCompany(session.companyId);
   const script = getScriptById(session.scriptId);
   if (!company || !script) {

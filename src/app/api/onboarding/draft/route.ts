@@ -31,7 +31,7 @@ export async function POST(req: Request) {
   try {
     const result = await draftFromWebsite(body.url.trim(), (body.blurb ?? "").slice(0, 600));
     await getStore().recordAudit({
-      companyId: resolveCompanyId(),
+      companyId: await resolveCompanyId(),
       actor: "onboarding",
       event: "brouillon_genere",
       detail: `${body.url} · ${result.sourceChars} caractères analysés · en attente d'approbation`,

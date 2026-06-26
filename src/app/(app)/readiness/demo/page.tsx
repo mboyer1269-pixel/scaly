@@ -8,7 +8,7 @@ export const dynamic = "force-dynamic";
 
 export default async function DemoReadinessPage() {
   const store = getStore();
-  const companyId = resolveCompanyId();
+  const companyId = await resolveCompanyId();
   const [calls, actions, reviews, evidence, audit] = await Promise.all([
     store.listCalls(companyId),
     store.listActions(companyId),
@@ -55,7 +55,7 @@ export default async function DemoReadinessPage() {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         {report.checks.map((check) => (
           <Card key={check.id} title={check.label}>
             <div className="flex items-start justify-between gap-3">
@@ -69,15 +69,15 @@ export default async function DemoReadinessPage() {
       </div>
 
       <div className="mt-6 flex flex-wrap gap-3">
-        <Link href="/simulator" className="rounded-lg bg-scaly-600 px-4 py-2 text-sm font-semibold text-white">
+        <Link href="/simulator" className="inline-flex min-h-11 items-center rounded-lg bg-scaly-700 px-4 py-2 text-sm font-semibold text-white hover:bg-scaly-800">
           Exécuter le scénario critique
         </Link>
         {vertical?.callId && (
-          <Link href={`/calls/${vertical.callId}`} className="rounded-lg border border-ink-200 px-4 py-2 text-sm font-semibold">
+          <Link href={`/calls/${vertical.callId}`} className="inline-flex min-h-11 items-center rounded-lg border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-800 hover:bg-ink-50">
             Inspecter la preuve
           </Link>
         )}
-        <Link href="/readiness/live" className="rounded-lg border border-ink-200 px-4 py-2 text-sm font-semibold">
+        <Link href="/readiness/live" className="inline-flex min-h-11 items-center rounded-lg border border-ink-300 px-4 py-2 text-sm font-semibold text-ink-800 hover:bg-ink-50">
           Vérifier les appels réels
         </Link>
       </div>

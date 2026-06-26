@@ -4,15 +4,25 @@
  */
 import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
-import { executeActionLive } from "@/services/action-engine";
+import { executeAction, executeActionLive } from "@/services/action-engine";
+import { getSessionRole } from "@/server/auth";
+import { resolveCompanyId } from "@/server/tenant";
+import { actionBelongsToCompany, canExecuteLiveActions } from "@/services/action-execution-policy";
 
 export const dynamic = "force-dynamic";
 
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const store = getStore();
-  const action = await store.getAction(params.id);
-  if (!action) return NextResponse.json({ error: "Action introuvable" }, { status: 404 });
-  const result = await executeActionLive(action);
+  const { id } = await params;
+  const action = await store.getAction(id);
+  if (
+    !action ||
+    (!actionBelongsToCompany(action, await resolveCompanyId()) && await getSessionRole() !== "founder")
+  ) {
+    return NextResponse.json({ error: "Action introuvable" }, { status: 404 });
+  }
+  const live = canExecuteLiveActions(store.info(), process.env.ALLOW_LIVE_ACTIONS);
+  const result = live ? await executeActionLive(action) : executeAction(action);
   await store.saveAction(result);
-  return NextResponse.json({ action: result });
+  return NextResponse.json({ action: result, executionMode: live ? "live" : "mock" });
 }

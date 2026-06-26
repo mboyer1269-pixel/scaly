@@ -10,17 +10,18 @@ import { UsageCard } from "@/components/UsageCard";
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
+  const store = getStore();
   const company = (await resolveCompany())!;
-  const calls = await getStore().listCalls(company.id);
+  const calls = await store.listCalls(company.id);
   const usage = computeMonthUsage(calls, new Date());
   return (
     <>
       <PageHeader title="Configuration de l'entreprise" subtitle="Ces informations alimentent directement les scripts, l'escalade et la conformité de l'agent" />
-      <div className="mb-6 grid gap-6 lg:grid-cols-2">
+      <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-2">
         <BillingCard company={company} />
         <UsageCard planId={company.planId} usage={usage} />
       </div>
-      <SettingsForm company={company} />
+      <SettingsForm company={company} persistent={store.info().persistent} />
     </>
   );
 }

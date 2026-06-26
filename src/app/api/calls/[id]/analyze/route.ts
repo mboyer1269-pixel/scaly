@@ -12,11 +12,12 @@ import { llmIntelligenceEngine, LlmNotConfiguredError } from "@/services/llm-int
 
 export const dynamic = "force-dynamic";
 
-export async function POST(_req: Request, { params }: { params: { id: string } }) {
+export async function POST(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const store = getStore();
-  const call = await store.getCall(params.id);
+  const { id } = await params;
+  const call = await store.getCall(id);
   // Garde d'appartenance (anti-IDOR) : même contrat que GET /api/calls/:id.
-  if (!call || (call.companyId !== resolveCompanyId() && getSessionRole() !== "founder")) {
+  if (!call || (call.companyId !== await resolveCompanyId() && await getSessionRole() !== "founder")) {
     return NextResponse.json({ error: "Appel introuvable" }, { status: 404 });
   }
 

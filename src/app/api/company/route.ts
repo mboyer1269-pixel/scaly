@@ -4,26 +4,48 @@ import { getStore } from "@/server/store";
 import { resolveCompanyId } from "@/server/tenant";
 import type { Company } from "@/domain/company";
 import { normalizeCoveragePolicy } from "@/services/coverage";
+import { isJsonObject, pickJsonFields } from "@/lib/request-body";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const company = await getStore().getCompany(resolveCompanyId());
+  const company = await getStore().getCompany(await resolveCompanyId());
   if (!company) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   return NextResponse.json({ company });
 }
 
 export async function PUT(req: Request) {
-  let patch: Partial<Company>;
+  let body: unknown;
   try {
-    patch = (await req.json()) as Partial<Company>;
+    body = await req.json();
   } catch {
     return NextResponse.json({ error: "Corps JSON invalide" }, { status: 400 });
   }
-  // Champs protégés : id, planId et billing (réservé au webhook Stripe) ne se modifient pas par cette route.
-  delete (patch as Record<string, unknown>).id;
-  delete (patch as Record<string, unknown>).planId;
-  delete (patch as Record<string, unknown>).billing;
+  if (!isJsonObject(body)) {
+    return NextResponse.json({ error: "Un objet JSON est requis" }, { status: 400 });
+  }
+  const patch = pickJsonFields<Company>(body, [
+    "name",
+    "businessDescription",
+    "sectorLabel",
+    "ownerName",
+    "ownerEmail",
+    "mainPhone",
+    "transferPhone",
+    "city",
+    "languages",
+    "defaultLanguage",
+    "tone",
+    "hours",
+    "escalationRules",
+    "essentialQuestions",
+    "services",
+    "serviceAreas",
+    "policies",
+    "followUp",
+    "coverage",
+    "compliance",
+  ]);
   if (patch.coverage) {
     try {
       patch.coverage = normalizeCoveragePolicy(patch.coverage);
@@ -34,7 +56,7 @@ export async function PUT(req: Request) {
       );
     }
   }
-  const company = await getStore().updateCompany(resolveCompanyId(), patch);
+  const company = await getStore().updateCompany(await resolveCompanyId(), patch);
   if (!company) return NextResponse.json({ error: "Introuvable" }, { status: 404 });
   return NextResponse.json({ company });
 }

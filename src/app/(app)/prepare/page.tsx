@@ -45,7 +45,7 @@ export default async function PreparePage() {
           <CoverageForm coverage={company.coverage} />
         </Card>
 
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
           <Card title="État de préparation" subtitle={`${checks.filter((check) => check.ok).length}/${checks.length} éléments configurés`}>
             <ul className="space-y-3">
               {checks.map((check) => (

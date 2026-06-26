@@ -53,6 +53,7 @@ class RulesV1Engine implements IntelligenceEngine {
   analyze(call: Call, script: IndustryScript, hints: AnalysisHints = {}): CallIntelligence {
     const text = callerText(call);
     const fields = hints.collectedFields ?? {};
+    const urgencyText = fields["description"]?.toLowerCase() || text;
 
     // --- Appel manqué : analyse minimale, valeur à risque calculée en analytics ---
     if (call.transcript.length === 0) {
@@ -85,7 +86,7 @@ class RulesV1Engine implements IntelligenceEngine {
     let urgency: Urgency = "normale";
     let urgencyHits = 0;
     for (const c of script.urgencyCriteria) {
-      if (c.keywords.some((k) => text.includes(k.toLowerCase()))) {
+      if (c.keywords.some((k) => urgencyText.includes(k.toLowerCase()))) {
         urgencyHits += 1;
         if (URGENCY_RANK[c.level] > URGENCY_RANK[urgency]) urgency = c.level;
       }

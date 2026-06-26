@@ -18,10 +18,10 @@ const FILTERS: { value: string; label: string }[] = [
   { value: "requires_config", label: "Config. requise" },
 ];
 
-export default async function ActionsPage({ searchParams }: { searchParams: { status?: string } }) {
+export default async function ActionsPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
   const store = getStore();
-  const allActions = await store.listActions(resolveCompanyId());
-  const filter = searchParams.status ?? "";
+  const allActions = await store.listActions(await resolveCompanyId());
+  const filter = (await searchParams).status ?? "";
   const actions = filter ? allActions.filter((a) => a.status === (filter as ActionStatus)) : allActions;
 
   const pendingCount = allActions.filter((a) => a.status === "pending").length;
