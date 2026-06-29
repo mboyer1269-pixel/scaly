@@ -7,19 +7,20 @@
   - 6 scénarios golden (`data/voice-scenarios.ts`) verrouillés en CI et rejoués en direct dans `/status` ; UI `/voice-lab` (pas-à-pas, autoplay, mode libre).
   - Boucle de valeur : session → `Call` analysé par le même IntelligenceEngine/ActionEngine (`voice-convert.ts`) ; `VoiceSession` persistée (Prisma) avec purge Loi 25 (turns/events purgés, fields/telemetry conservés).
   - Latences SIMULÉES, marquées `simulated:true` partout — les cibles p50/p95 restent des hypothèses jusqu'à P2B.
-- **P2B 🔧 — code complet, premier appel réel en attente d'un numéro Twilio.**
-  - `src/app/api/voice/incoming` : webhook Twilio signé (HMAC vérifié, falsification → 403), TwiML `<Connect><Stream>` vers le pont, **repli `<Dial>` vers l'humain si le realtime est absent — le téléphone ne casse jamais**.
+- **P2B 🔧 — code complet, preuve d'appel réel à exécuter.**
+  - `src/app/api/voice/incoming` : webhook Twilio signé (HMAC vérifié, falsification → 403), résolution du tenant par numéro appelé (`To`/`Called` → `Company.twilioPhoneNumber`), TwiML `<Connect><Stream>` vers le pont, **repli `<Dial>` vers l'humain si le realtime est absent — le téléphone ne casse jamais**.
+  - `src/app/api/sms/incoming` : même résolution par numéro appelé avant d'exposer les données au propriétaire.
   - `realtime/` : pont scaly-realtime (Node long-lived, `npm run realtime`) — Twilio Media Streams ↔ OpenAI Realtime, µ-law 8 kHz passthrough (zéro transcodage), VAD serveur + barge-in (response.cancel + clear), outil `transfer_to_human` → redirection REST Twilio, **latences RÉELLES mesurées par tour** (fin de parole → premier octet audio, `simulated:false`).
   - Prompt système (`src/services/voice-prompt.ts`) construit des MÊMES objets que le Voice Lab : divulgation IA, bilinguisme, urgences fast-track, interdits, **consentement de rappel (ADR-015)** — chaque garde-fou testé.
   - Fin d'appel → `/api/voice/complete` → Call `source:"live"` analysé par le même IntelligenceEngine/ActionEngine.
-  - Vérifié le 2026-06-11 : compte Twilio ACTIF (créds valides), pont configuré, webhook signé OK. **Il manque : un numéro Twilio (achat ~1-2 $US/mois) + une URL publique (ngrok).**
+  - Vérifié le 2026-06-29 : Clerk dev actif, Neon persistant, signature Twilio configurée, mapping voix/SMS multi-tenant présent. **Il manque encore la preuve opérationnelle : appeler un vrai numéro Twilio branché sur `/api/voice/incoming` et journaliser le résultat.**
 
 ## Runbook — premier appel réel (checklist exécutable)
 
-> **Pré-vol obligatoire** : `npm run pilot:check`. Régler tout **FAIL**, lire chaque **WARN**. Le gate confirme : auth, cohérence store, secret pont, signature Twilio, transport+repli, OpenAI, posture mono-tenant, garde-fous testés.
+> **Pré-vol obligatoire** : `npm run pilot:check`. Régler tout **FAIL**, lire chaque **WARN**. Le gate confirme : auth, cohérence store, secret pont, signature Twilio, transport+repli, OpenAI, résolution de tenant, garde-fous testés.
 
 ### A. Mise en place
-1. **Numéro Twilio** : Console → Phone Numbers → Buy (local QC, voix). Mettre `TWILIO_PHONE_NUMBER` à jour.
+1. **Numéro Twilio** : Console → Phone Numbers → Buy (local QC, voix). Assigner ce numéro au tenant (`Company.twilioPhoneNumber`) et garder `TWILIO_PHONE_NUMBER` pour les SMS sortants.
 2. **Tunnels** : `ngrok http 3000` (app) et `ngrok http 8081` (pont) — ou un seul tunnel + reverse proxy.
 3. **`.env.local`** : `SCALY_REALTIME_WS_URL=wss://<ngrok-pont>/twilio`, `SCALY_PUBLIC_URL=https://<ngrok-app>`, `REALTIME_SHARED_SECRET=<secret>` (les deux côtés), `OPENAI_API_KEY=<clé>`, `TWILIO_AUTH_TOKEN=<token>`. Pour persister les appels : `STORE_PROVIDER=prisma` + `DATABASE_URL` migrée.
 4. **Lancer** : `npm run dev` (app) + `npm run realtime` (pont).
@@ -46,7 +47,7 @@
 
 ### D. Avant tout client réel
 - [ ] 50 appels tests FR/EN (urgences incluses) — jalon 4.
-- [ ] **Avant un 2ᵉ client** : implémenter le mapping numéro Twilio→`companyId` (`/api/voice/incoming`) et passer `twilioTenantMapping` à `true` dans le pilot gate (ADR-017/019). Jusque-là : **mono-tenant pilote uniquement**.
+- [ ] **Avant un 2ᵉ client** : attribuer un numéro Twilio unique par entreprise, vérifier qu'aucun numéro n'est ambigu, puis refaire `npm run pilot:check` et un appel réel par tenant.
 
 ### Pile préparée (stubs honnêtes, plan B)
 - `adapters/voice/types.ts` : interfaces `TelephonyProvider`, `SpeechToTextProvider`, `TextToSpeechProvider`, `RealtimeDialogueProvider`, `NotConfiguredError`.

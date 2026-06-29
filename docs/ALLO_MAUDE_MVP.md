@@ -87,12 +87,14 @@ La fiche d'appel est visible immédiatement :
 | `TWILIO_ACCOUNT_SID` | Authentification Twilio | Oui (appels) |
 | `TWILIO_AUTH_TOKEN` | Signature webhook + SMS | Oui (prod) |
 | `TWILIO_PHONE_NUMBER` | Numéro Twilio affiché | Oui |
-| `SCALY_REALTIME_WS_URL` | URL du pont realtime (`wss://…/twilio`) | Oui |
+| `SCALY_REALTIME_WS_URL` | URL du pont realtime (`wss://…/twilio`) | Oui pour IA temps réel; absent = repli humain |
 | `SCALY_APP_URL` | URL interne de l'app Next.js (utilisée par le pont pour `/api/voice/context` et `/api/voice/complete`) | Oui (pont distant) |
 | `SCALY_PUBLIC_URL` | URL publique app (signature HMAC Twilio) | Recommandé |
 | `REALTIME_SHARED_SECRET` | Sécurité pont ↔ app (`/api/voice/context` + `/api/voice/complete` retournent 503 sans lui en prod) | **Requis (prod)** |
-| `DATABASE_URL` + `STORE_PROVIDER=prisma` | Persistance Postgres | Optionnel (mémoire sinon) |
-| `CLERK_SECRET_KEY` + `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Auth | Optionnel (dev ouvert sinon) |
+| `DATABASE_URL` + `STORE_PROVIDER=prisma` | Persistance Postgres | Requis pour pilote persistant |
+| `SCALY_AUTH_MODE=required` | Auth obligatoire hors démo locale | Requis en pilote |
+| `CLERK_SECRET_KEY` + `NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY` | Auth Clerk | Requis si auth required |
+| `CRON_SECRET` | Protection purge/digest | Requis pour automatisation |
 
 ### Lancer en local
 
@@ -145,7 +147,7 @@ Pour créer un profil Maude pour une vraie PME : `/onboarding` → coller l'URL 
 |---|---|
 | **Disponibilité** | Dépend de l'infra (Vercel + pont realtime long-lived). Aucun SLA garanti dans la version pilote. |
 | **Latence** | Cible < 800 ms perçue (p50). Mesuré à 211-386 ms (champion gpt-realtime + server_vad). Non garanti en production. |
-| **Multi-tenant** | Mono-tenant par défaut (`DEFAULT_COMPANY_ID`). RLS Postgres différé (ADR-016). |
+| **Multi-tenant** | Isolation applicative par claim Clerk `companyId` et numéro Twilio appelé. RLS Postgres différé en défense supplémentaire (ADR-016). |
 | **SMS** | Nécessite Twilio configuré. Sans clés → préparé mais non envoyé (loggué). |
 | **Enregistrement** | Transcription OpenAI Whisper uniquement. Pas d'enregistrement audio (recordingEnabled: false). |
 | **Calendrier** | Prise de RDV = collecte du moment souhaité seulement. Aucune intégration Calendar en MVP. |
@@ -159,11 +161,11 @@ Pour créer un profil Maude pour une vraie PME : `/onboarding` → coller l'URL 
 
 ## Prochaines étapes (ordre de ROI)
 
-1. **Numéro Twilio par PME pilote** — un numéro = un profil. Mapping numéro → companyId dans le store.
+1. **Preuve d'appel réel** — brancher un vrai numéro Twilio, vérifier signature, routage tenant, repli humain et persistance `source:"live"`.
 2. **Rappel vocal d'appel manqué < 2 min** (ADR-015 palier 1) — ROI le plus visible.
 3. **Onboarding self-serve** — `/onboarding` crée une vraie company + agente Maude. Actuellement : brouillon appliqué sur DEFAULT_COMPANY_ID.
 4. **A/B voix** — trancher gpt-realtime vs ConversationRelay (Polly Gabrielle fr-CA) à l'oreille.
-5. **Multi-tenant complet** — claim Clerk `companyId` + RLS Postgres (ADR-016 prérequis).
+5. **RLS Postgres** — ajouter la défense base de données maintenant que le tenant applicatif est explicite.
 6. **Calendrier** — intégration Google Calendar pour la prise de RDV réelle.
 7. **Page `/allo-maude` + domaine** — publier sur `allomau.de` ou sous-domaine Vercel.
 
@@ -172,7 +174,7 @@ Pour créer un profil Maude pour une vraie PME : `/onboarding` → coller l'URL 
 ## Tests disponibles
 
 ```bash
-# Suite complète (186 tests)
+# Suite complète (274 tests au 2026-06-29)
 npm test
 
 # Tests ciblés par domaine

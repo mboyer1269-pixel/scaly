@@ -11,17 +11,17 @@ Livré : domaine complet, 15 scripts, simulateur déterministe, intelligence rul
 **Critère de sortie atteint** : démo de 3 minutes qui répond à « combien d'argent Scaly me sauve ? ».
 
 ## P1 — Cerveau réel + persistance (≈ 2-3 semaines de travail focalisé)
-1. ✅ Postgres + Prisma (`STORE_PROVIDER=prisma`, vérifiable via `/status?live=1`) + job de purge `retentionDays` (`db:purge` + `/api/cron/purge`). Vérifié sur Postgres local ; Neon = swap de `DATABASE_URL` (ADR-011).
-2. ✅ Auth Clerk + RBAC owner/staff/founder derrière feature flag (clés présentes → auth active). Rattachement tenant ↔ session : mono-tenant assumé jusqu'aux pilotes (ADR-013).
+1. ✅ Postgres + Prisma (`STORE_PROVIDER=prisma`, vérifiable via `/status?live=1`) + job de purge `retentionDays` (`db:purge` + `/api/cron/purge`). Vérifié sur Neon via `pilot:check` (ADR-011).
+2. ✅ Auth Clerk + RBAC owner/staff/founder. Rattachement tenant ↔ session via `publicMetadata.companyId`; le fallback dangereux non-founder sans tenant est bloqué sur les routes sensibles (ADR-013/017/019).
 3. ✅ `LlmIntelligenceEngine` sur transcript brut + golden set des 53 appels annotés à la main. Mesuré : LLM 94,3 % intention / 94,3 % urgence (≥ 90 % atteint) ; rules-v1 94,3 % / 90,6 % (ADR-012). `npm run eval:golden -- --engine=llm`.
 4. ⏳ Simulateur LLM optionnel (conversations non templatées) — non fait, le mode seedé reste le banc d'essai.
 5. ⏳ Observabilité : uptime sur /api/health ✅ ; Sentry + logs structurés — non faits (compte requis).
-**KPI de phase** : analyse LLM ≥ 90 % sur golden set ✅ ; accès protégé ✅ (dès pose des clés) ; démo persistante en ligne ⏳ (déploiement Vercel + Neon restant).
+**KPI de phase** : analyse LLM ≥ 90 % sur golden set ✅ ; accès protégé ✅ ; démo persistante en ligne 🔧 (Vercel lié, env production à finaliser).
 **Risque principal** : dérive de scope sur l'auth multi-tenant → Clerk pris, on avance.
 
 ## P2 — La voix réelle (≈ 3-5 semaines, le vrai mur technique)
 **P2A — Voice Runtime Lab ✅ (ADR-014)** : cerveau conversationnel pur et déterministe — machine à états (12 états), NLU à règles FR-QC/EN, extraction progressive (statut/confiance/evidence, conflits explicites), langue par tour + dominante, barge-in, urgence fast-track, refus spam, transfert humain non négociable, flight recorder, latences simulées (déclarées telles) sous budget. 6 scénarios golden en CI + rejoués dans `/status` ; UI `/voice-lab` ; session → Call via le même IntelligenceEngine/ActionEngine ; `VoiceSession` persistée + purge Loi 25.
-**P2B — Transport réel 🔧 (code complet, appel réel en attente d'un numéro)** : webhook Twilio signé + repli `<Dial>` (le téléphone ne casse jamais), pont scaly-realtime (Media Streams ↔ OpenAI Realtime, µ-law passthrough, barge-in, transfert humain par outil, latences RÉELLES mesurées par tour), prompt système testé (divulgation IA, consentement de rappel ADR-015), fin d'appel → Call `source:"live"` analysé par le moteur existant. Vérifié : compte Twilio actif, pont configuré. **Restants** : numéro Twilio + ngrok (runbook docs/VOICE.md), puis jalons (4) 50 appels tests FR/EN dont urgences et (5) latence perçue < 800 ms p50 / < 1200 ms p95 — MESURÉE.
+**P2B — Transport réel 🔧 (code complet, preuve réelle en attente)** : webhook Twilio signé + mapping numéro appelé → tenant + repli `<Dial>` (le téléphone ne casse jamais), pont scaly-realtime (Media Streams ↔ OpenAI Realtime, µ-law passthrough, barge-in, transfert humain par outil, latences RÉELLES mesurées par tour), prompt système testé (divulgation IA, consentement de rappel ADR-015), fin d'appel → Call `source:"live"` analysé par le moteur existant. **Restants** : brancher un vrai numéro Twilio sur le webhook, exécuter l'appel de preuve, puis jalons (4) 50 appels tests FR/EN dont urgences et (5) latence perçue < 800 ms p50 / < 1200 ms p95 — MESURÉE.
 Conformité bloquante : avis juridique Loi 25, DPA fournisseurs, RPRP, politique de confidentialité.
 **KPI** : taux de complétion d'appel test > 90 %, transfert humain fonctionne à 100 %. **Coût estimé** : 50-150 $/mois infra + coûts API par appel.
 **Risques** : latence FR-QC des modèles temps réel (mitigation : plan B pipeline) ; accent québécois en STT (mitigation : jeu de test dédié, choix STT par benchmark).

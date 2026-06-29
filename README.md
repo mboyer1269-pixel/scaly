@@ -45,7 +45,7 @@ npm run pilot:check
 ```
 
 - `demo:check` vérifie le scénario vertical dans un repository mémoire et peut déclarer la démonstration locale prête.
-- `pilot:check` vérifie les dépendances d’un appel réel. Il doit échouer lorsque Postgres, l’authentification, Twilio, OpenAI Realtime ou les secrets requis ne sont pas réellement configurés.
+- `pilot:check` vérifie les dépendances d’un appel réel. Il échoue sur les prérequis bloquants (Postgres requis absent, auth required sans Clerk, signature Twilio publique absente, secret pont requis absent) et garde un verdict `WARN` honnête lorsque le téléphone fonctionne seulement en repli humain.
 
 ## Modes de persistance
 
@@ -63,8 +63,8 @@ Prisma et PostgreSQL utilisent la même interface de repository que la mémoire.
 | Modèle domaine, workflow simulé, actions, révisions, audit | Vérifié par tests |
 | Surfaces Allô Maude et frontière de marque | Vérifié par tests |
 | Démonstration locale complète | Vérifiée par `demo:check` |
-| Persistance commerciale | Configurée dans le code, non vérifiée sans Postgres |
-| Appels téléphoniques réels | Séparés; verdict donné par `pilot:check` |
+| Persistance commerciale | Prisma/Postgres, vérifiable par aller-retour live |
+| Appels téléphoniques réels | Webhook Twilio signé, tenant par numéro appelé, repli humain; preuve bout-en-bout à exécuter |
 | Mode mémoire | Simulation locale uniquement |
 
 Les statuts visibles — `Vérifié`, `Configuré, non vérifié`, `Simulé`, `Indisponible` — sont dérivés de la provenance et des preuves disponibles.
