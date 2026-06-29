@@ -69,10 +69,9 @@ async function main(): Promise<void> {
   const facts: PilotFacts = {
     packageScripts: packageScripts(),
     testFiles: testFiles(),
-    // Mapping Twilio numéro→companyId : non implémenté tant que ce flag est false.
-    // À passer à true LE JOUR où /api/voice/incoming résout la company par le
-    // numéro appelé (To/Called) au lieu de DEFAULT_COMPANY_ID — pas avant.
-    twilioTenantMapping: false,
+    // Mapping Twilio numéro→companyId : /api/voice/incoming et /api/sms/incoming
+    // résolvent la company par le numéro appelé (To/Called), sans fallback démo.
+    twilioTenantMapping: true,
     liveCheck: await liveCheck(),
   };
 

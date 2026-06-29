@@ -9,13 +9,92 @@
  * local), la vérification est sautée et tracée dans l'audit.
  */
 import { getStore } from "@/server/store";
-import { DEFAULT_COMPANY_ID } from "@/data/companies";
 import { twimlConnectStream, twimlFallbackTransfer, validateTwilioSignature } from "@/server/twilio";
+import { resolveTwilioTenant } from "@/server/twilio-tenant";
+import { getScriptById } from "@/data/industry-scripts";
+import { intelligenceEngine } from "@/services/intelligence";
+import { planActionsForCall } from "@/services/action-engine";
+import { newId } from "@/lib/format";
+import type { Call, TranscriptTurn } from "@/domain/call";
+import type { Company } from "@/domain/company";
 
 export const dynamic = "force-dynamic";
 
 function xml(body: string, status = 200): Response {
   return new Response(body, { status, headers: { "Content-Type": "text/xml; charset=utf-8" } });
+}
+
+const rejectXml = `<?xml version="1.0" encoding="UTF-8"?><Response><Reject /></Response>`;
+
+function callIdFromTwilio(callSid: string): string {
+  const safe = callSid.replace(/[^a-zA-Z0-9_-]/g, "").slice(0, 80);
+  return safe ? `call_twilio_${safe}` : newId("call_live");
+}
+
+function fallbackTranscript(company: Company): TranscriptTurn[] {
+  const text =
+    company.defaultLanguage === "en"
+      ? `Thank you for calling ${company.name}. One moment, we're connecting you.`
+      : `Merci d'appeler ${company.name}. Un instant, nous vous mettons en relation.`;
+  return [{ speaker: "agent", text, atMs: 0, lang: company.defaultLanguage }];
+}
+
+async function persistFallbackCall(opts: {
+  company: Company;
+  callSid: string;
+  from: string;
+  signatureVerified: boolean;
+}): Promise<void> {
+  const store = getStore();
+  const agent = await store.getAgentByCompany(opts.company.id);
+  const script = agent ? getScriptById(agent.qualificationScriptId) : undefined;
+  const now = new Date().toISOString();
+  const call: Call = {
+    id: callIdFromTwilio(opts.callSid),
+    companyId: opts.company.id,
+    direction: "inbound",
+    status: "transferred",
+    source: "live",
+    fromNumber: opts.from || "inconnu",
+    language: opts.company.defaultLanguage,
+    startedAt: now,
+    durationSec: 1,
+    scriptId: script?.id,
+    transcript: fallbackTranscript(opts.company),
+    provenance: {
+      provider: "twilio",
+      externalId: opts.callSid,
+      verifiedAt: opts.signatureVerified ? now : undefined,
+    },
+    recordingUrl: null,
+  };
+  if (script) {
+    call.intelligence = intelligenceEngine.analyze(call, script, {
+      transferred: true,
+      transferReason: "Repli humain Twilio: service realtime absent.",
+    });
+  }
+
+  const actions = call.intelligence ? planActionsForCall(call, opts.company) : [];
+  await store.addCall(call, actions);
+  await store.saveReadinessEvidence({
+    id: `evidence_${call.id}`,
+    companyId: opts.company.id,
+    kind: "live_call",
+    status: opts.signatureVerified ? "verified" : "configured_not_verified",
+    label: opts.signatureVerified ? "Webhook Twilio signé vérifié" : "Webhook Twilio sans signature vérifiée",
+    detail: `Appel entrant Twilio ${opts.callSid || "inconnu"} routé vers ${opts.company.id} puis transféré en repli humain.`,
+    callId: call.id,
+    externalId: opts.callSid || undefined,
+    verifiedAt: opts.signatureVerified ? now : undefined,
+    createdAt: now,
+  });
+  await store.recordAudit({
+    companyId: opts.company.id,
+    actor: "twilio",
+    event: "appel_live_repli_persisté",
+    detail: `${call.id} · Twilio ${opts.callSid || "?"} · transfert vers humain`,
+  });
 }
 
 export async function POST(req: Request) {
@@ -24,6 +103,7 @@ export async function POST(req: Request) {
   for (const [k, v] of form.entries()) if (typeof v === "string") params[k] = v;
 
   const authToken = process.env.TWILIO_AUTH_TOKEN;
+  let signatureVerified = false;
   if (authToken) {
     // Twilio signe l'URL PUBLIQUE qu'il a appelée : SCALY_PUBLIC_URL si défini,
     // sinon reconstruite depuis les en-têtes du proxy (ngrok, Vercel).
@@ -34,36 +114,44 @@ export async function POST(req: Request) {
     if (!validateTwilioSignature(authToken, `${base}/api/voice/incoming`, params, signature)) {
       return new Response("Signature Twilio invalide", { status: 403 });
     }
+    signatureVerified = true;
   }
 
   const store = getStore();
-  // ⚠️ BLOQUANT AVANT UN 2ᵉ CLIENT (ADR-017/019) — PILOTE MONO-TENANT UNIQUEMENT.
-  // Le webhook voix n'a pas de session : il résout DEFAULT_COMPANY_ID en dur.
-  // Avant d'accueillir un deuxième client, mapper le numéro APPELÉ (params["To"]
-  // ou ["Called"]) → companyId (un numéro Twilio par entreprise) et basculer le
-  // flag twilioTenantMapping du pilot gate à true. Tant que ce TODO existe,
-  // tous les appels entrants atterrissent sur le tenant démo.
-  const company = await store.getCompany(DEFAULT_COMPANY_ID);
-  if (!company) return xml(`<?xml version="1.0" encoding="UTF-8"?><Response><Reject /></Response>`, 200);
+  const resolved = await resolveTwilioTenant(store, params);
+  if (resolved.status !== "matched") {
+    await store.recordAudit({
+      actor: "twilio",
+      event: "appel_entrant_refusé",
+      detail:
+        resolved.status === "ambiguous"
+          ? `Numéro appelé ambigu ${resolved.calledNumber} → ${resolved.companyIds.join(", ")}`
+          : resolved.status === "not_found"
+            ? `Numéro appelé non mappé ${resolved.calledNumber}`
+            : "Numéro appelé absent du payload Twilio",
+    });
+    return xml(rejectXml);
+  }
 
   const callSid = params["CallSid"] ?? "inconnu";
   const from = params["From"] ?? "inconnu";
   await store.recordAudit({
-    companyId: company.id,
+    companyId: resolved.company.id,
     actor: "twilio",
     event: "appel_entrant_reçu",
-    detail: `${callSid} de ${from}${authToken ? "" : " · signature NON vérifiée (TWILIO_AUTH_TOKEN absent)"}`,
+    detail: `${callSid} de ${from} vers ${resolved.calledNumber}${authToken ? "" : " · signature NON vérifiée (TWILIO_AUTH_TOKEN absent)"}`,
   });
 
   const wsUrl = process.env.SCALY_REALTIME_WS_URL;
   if (!wsUrl) {
     // Repli : pas de service temps réel → l'humain prend l'appel directement.
-    return xml(twimlFallbackTransfer({ to: company.transferPhone, lang: company.defaultLanguage, companyName: company.name }));
+    await persistFallbackCall({ company: resolved.company, callSid, from, signatureVerified });
+    return xml(twimlFallbackTransfer({ to: resolved.company.transferPhone, lang: resolved.company.defaultLanguage, companyName: resolved.company.name }));
   }
 
   return xml(
     twimlConnectStream(wsUrl, {
-      companyId: company.id,
+      companyId: resolved.company.id,
       callSid,
       from,
     }),

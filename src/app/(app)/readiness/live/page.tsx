@@ -23,7 +23,7 @@ export default async function LiveReadinessPage() {
   const report = evaluatePilotReadiness(env, {
     packageScripts: { typecheck: "tsc --noEmit", test: "vitest run", build: "next build" },
     testFiles: ["golden-set", "voice-scenarios", "voice-runtime", "caller-memory", "tenant"],
-    twilioTenantMapping: false,
+    twilioTenantMapping: true,
     liveCheck: live ? { ok: live.ok, detail: live.detail } : undefined,
   });
 

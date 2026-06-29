@@ -39,6 +39,8 @@ export interface ResolvedTenant {
   warn: boolean;
 }
 
+export type RequiredTenant = { companyId: string } | { block: true };
+
 /**
  * Décision de tenant, PURE et testée (ADR-019).
  *
@@ -75,6 +77,17 @@ export async function resolveTenant(): Promise<ResolvedTenant> {
 /** Id d'entreprise de la session courante ; tenant démo sans auth ou sans claim (repli signalé). */
 export async function resolveCompanyId(): Promise<string> {
   return (await resolveTenant()).companyId;
+}
+
+/**
+ * Barrière opt-in pour les routes de données sensibles : conserve le mode
+ * no-auth démo, mais bloque le repli dangereux auth active + non-founder sans
+ * companyId. Ne remplace pas resolveCompanyId() globalement.
+ */
+export async function requireTenant(): Promise<RequiredTenant> {
+  const tenant = await resolveTenant();
+  if (tenant.source === "demo-fallback" && tenant.warn) return { block: true };
+  return { companyId: tenant.companyId };
 }
 
 /** Entreprise de la session courante (undefined si l'id mappé n'existe pas en base). */

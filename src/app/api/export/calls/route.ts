@@ -5,7 +5,7 @@
  * ?status=rescue → seulement la file de sauvetage (manqués non récupérés).
  */
 import { getStore } from "@/server/store";
-import { resolveCompany } from "@/server/tenant";
+import { requireTenant } from "@/server/tenant";
 import { computeRescueQueue } from "@/services/rescue";
 import { INTENT_LABELS, NEXT_ACTION_LABELS } from "@/domain/call";
 import { callStatusBadge, leadBadge, urgencyBadge } from "@/lib/labels";
@@ -24,7 +24,9 @@ export async function GET(req: Request) {
   const rescueOnly = url.searchParams.get("status") === "rescue";
 
   const store = getStore();
-  const company = await resolveCompany();
+  const tenant = await requireTenant();
+  if ("block" in tenant) return new Response("Ressource introuvable.", { status: 404 });
+  const company = await store.getCompany(tenant.companyId);
   if (!company) return new Response("Compagnie introuvable", { status: 404 });
   const calls = await store.listCalls(company.id);
   const actions = await store.listActions(company.id);

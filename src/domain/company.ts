@@ -96,6 +96,8 @@ export interface Company {
   ownerName: string;
   ownerEmail: string;
   mainPhone: string;
+  /** Numéro Twilio entrant assigné à ce tenant. Sert au routage voix/SMS multi-tenant. */
+  twilioPhoneNumber?: string;
   transferPhone: string;
   city: string;
   languages: LanguageCode[];

@@ -6,7 +6,7 @@ import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
 import { executeAction, executeActionLive } from "@/services/action-engine";
 import { getSessionRole } from "@/server/auth";
-import { resolveCompanyId } from "@/server/tenant";
+import { requireTenant } from "@/server/tenant";
 import { actionBelongsToCompany, canExecuteLiveActions } from "@/services/action-execution-policy";
 
 export const dynamic = "force-dynamic";
@@ -15,9 +15,11 @@ export async function POST(_req: Request, { params }: { params: Promise<{ id: st
   const store = getStore();
   const { id } = await params;
   const action = await store.getAction(id);
+  const [tenant, role] = await Promise.all([requireTenant(), getSessionRole()]);
+  if ("block" in tenant) return NextResponse.json({ error: "Action introuvable" }, { status: 404 });
   if (
     !action ||
-    (!actionBelongsToCompany(action, await resolveCompanyId()) && await getSessionRole() !== "founder")
+    (!actionBelongsToCompany(action, tenant.companyId) && role !== "founder")
   ) {
     return NextResponse.json({ error: "Action introuvable" }, { status: 404 });
   }

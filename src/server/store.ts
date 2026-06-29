@@ -18,7 +18,6 @@ import type { VoiceSessionRecord } from "@/domain/voice";
 import type { ReadinessEvidence, ReadinessKind } from "@/domain/readiness";
 import type { ReviewItem, ReviewStatus } from "@/domain/review";
 import { buildSeedData } from "./seed";
-import { PrismaStore } from "./prisma-store";
 
 /** Journal d'audit de conformité (qui a changé quoi, quand). */
 export interface ComplianceAuditEntry {
@@ -395,6 +394,12 @@ export class InMemoryStore implements ScalyRepository {
   }
 }
 
+function createPrismaStore(): ScalyRepository {
+  // Charge Prisma uniquement quand STORE_PROVIDER=prisma.
+  const { PrismaStore } = require("./prisma-store") as typeof import("./prisma-store");
+  return new PrismaStore();
+}
+
 /**
  * Singleton (survit au hot-reload Next.js via globalThis).
  * STORE_PROVIDER=prisma → Postgres réel ; sinon démo in-memory.
@@ -403,7 +408,7 @@ export function getStore(): ScalyRepository {
   const wanted: StoreProvider = process.env.STORE_PROVIDER === "prisma" ? "prisma" : "memory";
   const g = globalThis as { __scalyStore?: ScalyRepository };
   if (!g.__scalyStore || g.__scalyStore.info().provider !== wanted) {
-    g.__scalyStore = wanted === "prisma" ? new PrismaStore() : new InMemoryStore();
+    g.__scalyStore = wanted === "prisma" ? createPrismaStore() : new InMemoryStore();
   }
   return g.__scalyStore;
 }
