@@ -13,7 +13,7 @@ PR : https://github.com/mboyer1269-pixel/scaly/pull/16
 | Persistance commerciale | **READY** | Prisma/Postgres vérifié avec Neon par aller-retour live. |
 | Premier appel téléphonique réel | **READY EN REPLI HUMAIN** | Twilio signé, tenant résolu par numéro appelé, fallback `<Dial>` actif; preuve d'appel réel à exécuter. |
 | IA vocale temps réel | **NOT READY PROD** | `SCALY_REALTIME_WS_URL` absent; le téléphone fonctionne sans IA via repli humain. |
-| Purge/digest automatisés | **NOT READY PROD** | `CRON_SECRET` absent; commandes manuelles disponibles. |
+| Purge/digest automatisés | **READY APRÈS DÉPLOIEMENT CRON** | `CRON_SECRET` est configuré sur Vercel; `vercel.json` déclare purge et digest. |
 
 ## Commandes vérifiées
 
@@ -38,10 +38,10 @@ PR : https://github.com/mboyer1269-pixel/scaly/pull/16
 
 ## Restants avant production publique
 
-1. Configurer les variables Vercel production : Clerk prod, Neon, Twilio, OpenAI, `REALTIME_SHARED_SECRET`, `CRON_SECRET`.
+1. Confirmer les claims Clerk production du pilote : `publicMetadata.role` et `publicMetadata.companyId`.
 2. Configurer un vrai numéro Twilio par tenant (`Company.twilioPhoneNumber`) et pointer le webhook vers `/api/voice/incoming`.
 3. Exécuter un appel réel signé Twilio et vérifier : transfert humain, appel persisté, preuve readiness.
-4. Activer Vercel Cron pour `/api/cron/purge` et `/api/cron/digest`.
+4. Vérifier la première exécution Vercel Cron : `/api/cron/purge` et `/api/cron/digest` doivent recevoir `Authorization: Bearer <CRON_SECRET>`.
 5. Brancher `SCALY_REALTIME_WS_URL` seulement quand le pont realtime est joignable et OpenAI configuré.
 6. Faire les 50 appels tests FR/EN avec mesures de latence avant de vendre l'IA vocale comme vérifiée.
 7. Ajouter RLS Postgres avant self-serve multi-client.
