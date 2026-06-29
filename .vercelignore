@@ -3,14 +3,8 @@ node_modules/
 out/
 *.log
 .env
-.env.local
-.install.done
-.build.done
-tsconfig.tsbuildinfo
-next-env.d.ts
-install.log
-.superpowers/
-.vercel
+.env.*
+.vercel/
 
 # Local agent/tooling state generated during setup.
 .agents/

@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { SignedIn, SignedOut, SignInButton, SignUpButton, UserButton } from "@clerk/nextjs";
 import {
   ArrowRight,
   Check,
@@ -10,6 +11,7 @@ import {
   ShieldCheck,
   Sparkles,
 } from "lucide-react";
+import { isAuthEnabled } from "@/server/auth";
 
 const FLOW = [
   {
@@ -40,6 +42,7 @@ const REALITY = [
 ];
 
 export function AlloMaudeLanding() {
+  const authOn = isAuthEnabled();
   return (
     <div className="min-h-screen bg-[#f5f1e8] text-[#17211f]">
       <header className="border-b border-[#17211f]/10">
@@ -59,6 +62,25 @@ export function AlloMaudeLanding() {
             <Link href="/pricing" className="hidden rounded-full px-4 py-2 text-sm font-semibold text-[#40504c] hover:bg-white/70 sm:inline-flex">
               Tarifs
             </Link>
+            {authOn && (
+              <>
+                <SignedOut>
+                  <SignInButton>
+                    <button className="hidden rounded-full px-4 py-2 text-sm font-semibold text-[#40504c] hover:bg-white/70 sm:inline-flex">
+                      Connexion
+                    </button>
+                  </SignInButton>
+                  <SignUpButton>
+                    <button className="hidden rounded-full border border-[#17211f]/15 bg-white/70 px-4 py-2 text-sm font-bold text-[#17211f] hover:bg-white sm:inline-flex">
+                      Créer un compte
+                    </button>
+                  </SignUpButton>
+                </SignedOut>
+                <SignedIn>
+                  <UserButton afterSignOutUrl="/" />
+                </SignedIn>
+              </>
+            )}
             <Link href="/dashboard" className="inline-flex items-center gap-2 rounded-full bg-[#17211f] px-4 py-2.5 text-sm font-bold text-white hover:bg-[#27332f]">
               Ouvrir l’espace de travail <ArrowRight size={15} />
             </Link>

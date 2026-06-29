@@ -61,15 +61,13 @@ describe("evaluatePilotReadiness — production durcie complète", () => {
     OPENAI_API_KEY: "sk-openai",
     CRON_SECRET: "cron",
   };
-  const facts: PilotFacts = { ...HEALTHY_FACTS, liveCheck: { ok: true, detail: "aller-retour OK (12 ms)" } };
+  const facts: PilotFacts = { ...HEALTHY_FACTS, twilioTenantMapping: true, liveCheck: { ok: true, detail: "aller-retour OK (12 ms)" } };
   const report = evaluatePilotReadiness(env, facts);
 
-  it("verdict WARN : tout est vert SAUF la posture mono-tenant (honnête)", () => {
-    // Le seul WARN restant est le mapping Twilio→companyId.
-    const nonPass = report.checks.filter((c) => c.status !== "pass");
-    expect(nonPass).toHaveLength(1);
-    expect(nonPass[0].id).toBe("tenant_mapping");
-    expect(report.verdict).toBe("warn");
+  it("verdict PASS quand le mapping Twilio→tenant est présent", () => {
+    expect(report.checks.filter((c) => c.status !== "pass")).toHaveLength(0);
+    expect(report.verdict).toBe("pass");
+    expect(report.singleTenantOnly).toBe(false);
   });
 
   it("appel réel IA complet possible", () => {

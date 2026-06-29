@@ -7,10 +7,11 @@
  * tout autre expéditeur obtient une réponse générique sans information.
  */
 import { getStore } from "@/server/store";
-import { DEFAULT_COMPANY_ID } from "@/data/companies";
 import { validateTwilioSignature, xmlEscape } from "@/server/twilio";
+import { resolveTwilioTenant } from "@/server/twilio-tenant";
 import { answerOwnerKeyword, parseOwnerKeyword } from "@/services/digest";
 import { isRevocationMessage } from "@/services/consent";
+import { canonicalPhone } from "@/domain/consent";
 
 export const dynamic = "force-dynamic";
 
@@ -19,11 +20,6 @@ function smsReply(body: string): Response {
     `<?xml version="1.0" encoding="UTF-8"?><Response><Message>${xmlEscape(body)}</Message></Response>`,
     { headers: { "Content-Type": "text/xml; charset=utf-8" } },
   );
-}
-
-/** Normalise un numéro pour comparaison : chiffres seulement, sans le 1 initial. */
-function canon(phone: string): string {
-  return phone.replace(/\D/g, "").replace(/^1/, "");
 }
 
 export async function POST(req: Request) {
@@ -43,8 +39,21 @@ export async function POST(req: Request) {
   }
 
   const store = getStore();
-  const company = await store.getCompany(DEFAULT_COMPANY_ID);
-  if (!company) return smsReply("Service indisponible.");
+  const resolved = await resolveTwilioTenant(store, params);
+  if (resolved.status !== "matched") {
+    await store.recordAudit({
+      actor: "twilio",
+      event: "sms_entrant_refusé",
+      detail:
+        resolved.status === "ambiguous"
+          ? `Numéro appelé ambigu ${resolved.calledNumber} → ${resolved.companyIds.join(", ")}`
+          : resolved.status === "not_found"
+            ? `Numéro appelé non mappé ${resolved.calledNumber}`
+            : "Numéro appelé absent du payload Twilio",
+    });
+    return smsReply("Service indisponible.");
+  }
+  const company = resolved.company;
 
   const from = params["From"] ?? "";
   const body = params["Body"] ?? "";
@@ -64,7 +73,7 @@ export async function POST(req: Request) {
   }
 
   // Seul le propriétaire parle à sa réceptionniste — jamais de données à un tiers.
-  if (canon(from) !== canon(company.transferPhone)) {
+  if (canonicalPhone(from) !== canonicalPhone(company.transferPhone)) {
     await store.recordAudit({ companyId: company.id, actor: "twilio", event: "sms_entrant_tiers", detail: `De ${from} — réponse générique sans données.` });
     return smsReply(`${company.name} : merci pour votre message ! Pour nous joindre, appelez-nous — on s'occupe de vous rapidement.`);
   }

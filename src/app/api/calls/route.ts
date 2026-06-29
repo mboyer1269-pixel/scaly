@@ -2,7 +2,7 @@
 import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
 import { getSessionRole } from "@/server/auth";
-import { resolveCompanyId } from "@/server/tenant";
+import { requireTenant } from "@/server/tenant";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,10 @@ export async function GET(req: Request) {
   const url = new URL(req.url);
   // ?companyId= : réservé au fondateur (vue cross-tenant de /admin) — sinon le tenant de la session.
   const requested = url.searchParams.get("companyId");
-  const companyId = requested && await getSessionRole() === "founder" ? requested : await resolveCompanyId();
+  const role = await getSessionRole();
+  const tenant = requested && role === "founder" ? { companyId: requested } : await requireTenant();
+  if ("block" in tenant) return NextResponse.json({ error: "Ressource introuvable." }, { status: 404 });
+  const companyId = tenant.companyId;
   const status = url.searchParams.get("status");
   const urgency = url.searchParams.get("urgency");
   const intent = url.searchParams.get("intent");

@@ -5,11 +5,16 @@
  */
 import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
+import { getSessionRole } from "@/server/auth";
+import { requireTenant } from "@/server/tenant";
+import { filterVoiceSessionsForTenant } from "@/services/voice-lab-security";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const records = await getStore().listVoiceSessions();
+  const [tenant, role] = await Promise.all([requireTenant(), getSessionRole()]);
+  if ("block" in tenant) return NextResponse.json({ error: "Session introuvable" }, { status: 404 });
+  const records = filterVoiceSessionsForTenant(await getStore().listVoiceSessions(), tenant.companyId, role);
   return NextResponse.json({
     sessions: records.map((r) => ({
       id: r.id,

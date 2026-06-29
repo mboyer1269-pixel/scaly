@@ -24,6 +24,7 @@ model Company {
   ownerName       String
   ownerEmail      String
   mainPhone       String
+  twilioPhoneNumber String? @unique
   transferPhone   String
   city            String
   languages       String[] // ["fr","en"]
