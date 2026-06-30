@@ -7,13 +7,13 @@
   - 6 scénarios golden (`data/voice-scenarios.ts`) verrouillés en CI et rejoués en direct dans `/status` ; UI `/voice-lab` (pas-à-pas, autoplay, mode libre).
   - Boucle de valeur : session → `Call` analysé par le même IntelligenceEngine/ActionEngine (`voice-convert.ts`) ; `VoiceSession` persistée (Prisma) avec purge Loi 25 (turns/events purgés, fields/telemetry conservés).
   - Latences SIMULÉES, marquées `simulated:true` partout — les cibles p50/p95 restent des hypothèses jusqu'à P2B.
-- **P2B 🔧 — code complet, preuve d'appel réel à exécuter.**
+- **P2B 🔧 — repli humain réel vérifié, IA realtime à brancher.**
   - `src/app/api/voice/incoming` : webhook Twilio signé (HMAC vérifié, falsification → 403), résolution du tenant par numéro appelé (`To`/`Called` → `Company.twilioPhoneNumber`), TwiML `<Connect><Stream>` vers le pont, **repli `<Dial>` vers l'humain si le realtime est absent — le téléphone ne casse jamais**.
   - `src/app/api/sms/incoming` : même résolution par numéro appelé avant d'exposer les données au propriétaire.
   - `realtime/` : pont scaly-realtime (Node long-lived, `npm run realtime`) — Twilio Media Streams ↔ OpenAI Realtime, µ-law 8 kHz passthrough (zéro transcodage), VAD serveur + barge-in (response.cancel + clear), outil `transfer_to_human` → redirection REST Twilio, **latences RÉELLES mesurées par tour** (fin de parole → premier octet audio, `simulated:false`).
   - Prompt système (`src/services/voice-prompt.ts`) construit des MÊMES objets que le Voice Lab : divulgation IA, bilinguisme, urgences fast-track, interdits, **consentement de rappel (ADR-015)** — chaque garde-fou testé.
   - Fin d'appel → `/api/voice/complete` → Call `source:"live"` analysé par le même IntelligenceEngine/ActionEngine.
-  - Vérifié le 2026-06-29 : Clerk dev actif, Neon persistant, signature Twilio configurée, mapping voix/SMS multi-tenant présent. **Il manque encore la preuve opérationnelle : appeler un vrai numéro Twilio branché sur `/api/voice/incoming` et journaliser le résultat.**
+  - Vérifié le 2026-06-30 : un appel Twilio réel a atteint `/api/voice/incoming`, résolu `comp_belair`, créé `call_twilio_CA3f3e533a6a5bf615b17869ad5c37bbb1` (`source:"live"`, `status:"transferred"`) et une preuve `live_call` vérifiée. **Il manque encore l'IA temps réel : `SCALY_REALTIME_WS_URL` reste absent, donc le chemin vérifié est le repli humain.**
 
 ## Runbook — premier appel réel (checklist exécutable)
 
@@ -34,7 +34,7 @@
 - [ ] Webhook Twilio configuré sur le bon numéro (POST).
 
 ### C. Tests d'appel (à journaliser, noter sur 10)
-- [ ] **Repli `<Dial>` quand realtime absent** : arrêter le pont (ou retirer `SCALY_REALTIME_WS_URL`), rappeler → l'appel aboutit DIRECTEMENT à l'humain. *Le téléphone ne casse jamais.*
+- [x] **Repli `<Dial>` quand realtime absent** : appel réel vérifié le 2026-06-30 → webhook signé, tenant résolu, appel `source:"live"` persisté, transfert humain. *Le téléphone ne casse jamais.*
 - [ ] **« Je veux parler à un humain »** → transfert immédiat vers `transferPhone`.
 - [ ] **Urgence** (« j'ai de l'eau partout ») → empathie d'abord, fast-track, transfert à l'équipe de garde.
 - [ ] **FR-QC** : accent et tournures d'ici, accueil < 1 s.

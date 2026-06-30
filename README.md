@@ -64,7 +64,7 @@ Prisma et PostgreSQL utilisent la même interface de repository que la mémoire.
 | Surfaces Allô Maude et frontière de marque | Vérifié par tests |
 | Démonstration locale complète | Vérifiée par `demo:check` |
 | Persistance commerciale | Prisma/Postgres, vérifiable par aller-retour live |
-| Appels téléphoniques réels | Webhook Twilio signé, tenant par numéro appelé, repli humain; preuve bout-en-bout à exécuter |
+| Appels téléphoniques réels | Webhook Twilio signé, tenant par numéro appelé, repli humain vérifié par appel réel; IA realtime non branchée |
 | Mode mémoire | Simulation locale uniquement |
 
 Les statuts visibles — `Vérifié`, `Configuré, non vérifié`, `Simulé`, `Indisponible` — sont dérivés de la provenance et des preuves disponibles.
