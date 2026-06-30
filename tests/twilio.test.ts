@@ -1,6 +1,6 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { twimlConnectStream, twimlDial, twimlFallbackTransfer, validateTwilioSignature, xmlEscape } from "@/server/twilio";
+import { twimlConnectRelay, twimlConnectStream, twimlDial, twimlFallbackTransfer, validateTwilioSignature, xmlEscape } from "@/server/twilio";
 
 describe("TwiML", () => {
   it("échappe le XML (jamais d'injection via nom d'entreprise ou paramètre)", () => {
@@ -13,6 +13,28 @@ describe("TwiML", () => {
     expect(xml).toContain(`<Parameter name="companyId" value="comp_belair" />`);
     expect(xml).toContain(`<Parameter name="callSid" value="CA123" />`);
     expect(xml.startsWith(`<?xml version="1.0" encoding="UTF-8"?>`)).toBe(true);
+  });
+
+  it("Connect/ConversationRelay pointe vers le prototype A/B avec voix fr-CA et paramètres échappés", () => {
+    const xml = twimlConnectRelay(
+      "wss://relay.scaly.ca/relay",
+      {
+        welcomeGreeting: `Plomberie "Bélair", bonjour !`,
+        language: "fr-CA",
+        ttsProvider: "Amazon",
+        voice: "Gabrielle-Neural",
+        transcriptionProvider: "Google",
+      },
+      { companyId: "comp_belair", callSid: "CA123" },
+    );
+    expect(xml).toContain(`<Connect><ConversationRelay url="wss://relay.scaly.ca/relay"`);
+    expect(xml).toContain(`welcomeGreeting="Plomberie &quot;Bélair&quot;, bonjour !"`);
+    expect(xml).toContain(`language="fr-CA"`);
+    expect(xml).toContain(`ttsProvider="Amazon"`);
+    expect(xml).toContain(`voice="Gabrielle-Neural"`);
+    expect(xml).toContain(`transcriptionProvider="Google"`);
+    expect(xml).not.toContain("speechModel");
+    expect(xml).toContain(`<Parameter name="companyId" value="comp_belair" />`);
   });
 
   it("repli : message FR-CA puis <Dial> vers l'humain — le téléphone ne casse jamais", () => {

@@ -36,6 +36,35 @@ export function twimlConnectStream(wsUrl: string, parameters: Record<string, str
   return `<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="${xmlEscape(wsUrl)}">${params}</Stream></Connect></Response>`;
 }
 
+/** Options voix du prototype ConversationRelay — Twilio porte l'ASR et la TTS. */
+export interface RelayTwimlOptions {
+  /** Accueil parlé par Twilio dès le décroché. */
+  welcomeGreeting: string;
+  /** fr-CA par défaut : langue ASR + TTS de la session. */
+  language: string;
+  /** "Amazon" (Polly), "Google", "ElevenLabs", selon le compte Twilio. */
+  ttsProvider: string;
+  /** Exemple : "Gabrielle-Neural" pour tester une voix fr-CA native. */
+  voice: string;
+  /** "Google" ou "Deepgram", selon le compte Twilio. */
+  transcriptionProvider: string;
+  /** Modèle ASR optionnel. */
+  speechModel?: string;
+}
+
+/** TwiML : ouvre une session ConversationRelay vers le prototype A/B. */
+export function twimlConnectRelay(wsUrl: string, opts: RelayTwimlOptions, parameters: Record<string, string> = {}): string {
+  const attrs =
+    `url="${xmlEscape(wsUrl)}" welcomeGreeting="${xmlEscape(opts.welcomeGreeting)}" ` +
+    `language="${xmlEscape(opts.language)}" ttsProvider="${xmlEscape(opts.ttsProvider)}" voice="${xmlEscape(opts.voice)}" ` +
+    `transcriptionProvider="${xmlEscape(opts.transcriptionProvider)}"` +
+    (opts.speechModel ? ` speechModel="${xmlEscape(opts.speechModel)}"` : "");
+  const params = Object.entries(parameters)
+    .map(([name, value]) => `<Parameter name="${xmlEscape(name)}" value="${xmlEscape(value)}" />`)
+    .join("");
+  return `<?xml version="1.0" encoding="UTF-8"?><Response><Connect><ConversationRelay ${attrs}>${params}</ConversationRelay></Connect></Response>`;
+}
+
 /**
  * TwiML de repli : message court dans la langue de l'entreprise puis transfert
  * direct au numéro humain. Utilisé quand le realtime n'est pas configuré ou

@@ -80,12 +80,18 @@ export function computeRoiSnapshot(company: Company, d: DashboardData, calls: Ca
   const planPriceCad = PLANS[company.planId].priceMonthlyCad;
   const since = now.getTime() - d.periodDays * 24 * 3600 * 1000;
   const inPeriod = calls.filter((c) => new Date(c.startedAt).getTime() >= since);
+  const savedCalls = inPeriod.filter((c) => c.intelligence?.saved);
+  const protectedDeclaredCad = savedCalls
+    .filter((c) => c.intelligence?.valueBasis === "montant_mentionne")
+    .reduce((sum, c) => sum + (c.intelligence?.estimatedValueCad ?? 0), 0);
   const enCallsCount = inPeriod.filter((c) => c.language === "en" && c.status !== "missed").length;
   const atRiskCount = inPeriod.filter((c) => RESCUABLE_STATUSES.has(c.status) && !c.intelligence?.saved).length;
   return {
     periodDays: d.periodDays,
     planPriceCad,
     protectedCad: d.savedValueCad,
+    protectedDeclaredCad,
+    protectedEstimatedCad: Math.max(0, d.savedValueCad - protectedDeclaredCad),
     wouldBeLostCount: d.savedCount,
     atRiskCad: d.missedValueAtRiskCad,
     atRiskCount,

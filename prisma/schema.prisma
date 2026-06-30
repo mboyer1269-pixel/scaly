@@ -1,9 +1,10 @@
 // ============================================================================
-// Scaly — Schéma Postgres PRÉPARÉ (P1). NON BRANCHÉ : le store actuel est
-// in-memory (src/server/store.ts). Ce schéma est le contrat de migration.
-// Choix assumé : transcript/intelligence en Json au départ (vitesse P1),
-// extraction en colonnes/tables dédiées quand les requêtes analytiques
-// l'exigeront (P3+). Voir docs/DECISIONS.md (ADR-007).
+// Scaly — schéma Postgres actif via Prisma.
+// STORE_PROVIDER=prisma utilise ce schéma avec Neon/Postgres; STORE_PROVIDER
+// absent ou "memory" garde la démo locale éphémère. Choix assumé :
+// transcript/intelligence en Json au départ (vitesse P1), extraction en
+// colonnes/tables dédiées quand les requêtes analytiques l'exigeront (P3+).
+// Voir docs/DECISIONS.md (ADR-007).
 // ============================================================================
 
 generator client {

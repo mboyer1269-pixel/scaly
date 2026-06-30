@@ -101,7 +101,11 @@ describe("computeRoiSnapshot", () => {
       // 2 appels sauvés de 600 $ chacun
       ...[1, 2].map((n) => {
         const c = call({ id: `s${n}`, minutesAgo: 60 * n, status: "completed" });
-        c.intelligence = intel({ saved: { reason: "hors_heures" }, estimatedValueCad: 600 });
+        c.intelligence = intel({
+          saved: { reason: "hors_heures" },
+          estimatedValueCad: n === 1 ? 700 : 500,
+          valueBasis: n === 1 ? "montant_mentionne" : "bareme_industrie",
+        });
         return c;
       }),
       // 1 manqué non récupéré
@@ -112,6 +116,8 @@ describe("computeRoiSnapshot", () => {
     const d = computeDashboard(company, calls, [], 14, NOW);
     const roi = computeRoiSnapshot(company, d, calls, NOW);
     expect(roi.protectedCad).toBe(1200);
+    expect(roi.protectedDeclaredCad).toBe(700);
+    expect(roi.protectedEstimatedCad).toBe(500);
     expect(roi.wouldBeLostCount).toBe(2);
     expect(roi.atRiskCount).toBe(1);
     expect(roi.enCallsCount).toBe(1);

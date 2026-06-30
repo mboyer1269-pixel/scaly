@@ -69,6 +69,12 @@ export default async function DashboardPage() {
               <> — <span className="font-bold text-ink-900">{String(roi.multiple).replace(".", ",")}×</span> le prix de votre plan ({formatCad(roi.planPriceCad)}/mois)</>
             )}.
           </p>
+          {roi.protectedCad > 0 && (
+            <p className="mt-2 text-xs leading-relaxed text-ink-500">
+              Provenance : <span className="font-semibold text-ink-800">{formatCad(roi.protectedDeclaredCad)}</span> déclarés en appel ·{" "}
+              <span className="font-semibold text-ink-800">{formatCad(roi.protectedEstimatedCad)}</span> estimés par barème.
+            </p>
+          )}
           <dl className="mt-3 space-y-1.5 border-t border-ink-100 pt-3 text-xs text-ink-500">
             <div className="flex justify-between">
               <dt>Encore à risque (manqués non récupérés)</dt>
