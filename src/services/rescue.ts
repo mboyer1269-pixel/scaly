@@ -23,6 +23,7 @@ export const RESCUE_WARM_WINDOW_MIN = 120;
 
 /** Statuts d'appel qui constituent une perte potentielle à récupérer. */
 const RESCUABLE_STATUSES = new Set<Call["status"]>(["missed", "voicemail", "abandoned"]);
+const SMS_OUTREACH_STATUSES = new Set<ScalyAction["status"]>(["pending", "executing", "succeeded"]);
 
 function windowFor(minutes: number): RescueWindow {
   if (minutes <= RESCUE_CRITICAL_WINDOW_MIN) return "fenetre_critique";
@@ -44,7 +45,7 @@ export function computeRescueQueue(company: Company, calls: Call[], actions: Sca
   const baseline = getScriptByIndustry(company.industry).valueBaselineCad;
   const oldest = now.getTime() - RESCUE_MAX_AGE_DAYS * 24 * 3600 * 1000;
   const smsByCall = new Set(
-    actions.filter((a) => a.type === "send_sms" && a.callId && a.status !== "failed").map((a) => a.callId as string),
+    actions.filter((a) => a.type === "send_sms" && a.callId && SMS_OUTREACH_STATUSES.has(a.status)).map((a) => a.callId as string),
   );
 
   return calls
