@@ -6,6 +6,12 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { LanguageCode } from "@/domain/company";
 
+export interface RelaySessionIdentity {
+  companyId: string;
+  callSid: string;
+  from: string;
+}
+
 export function xmlEscape(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -25,6 +31,18 @@ export function validateTwilioSignature(authToken: string, url: string, params: 
   const expected = createHmac("sha1", authToken).update(Buffer.from(data, "utf-8")).digest("base64");
   const a = Buffer.from(expected);
   const b = Buffer.from(signature);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
+export function relaySessionToken(secret: string, identity: RelaySessionIdentity): string {
+  const data = `${identity.companyId}|${identity.callSid}|${identity.from}`;
+  return createHmac("sha256", secret).update(Buffer.from(data, "utf-8")).digest("base64url");
+}
+
+export function verifyRelaySessionToken(secret: string, identity: RelaySessionIdentity, token: string): boolean {
+  const expected = relaySessionToken(secret, identity);
+  const a = Buffer.from(expected);
+  const b = Buffer.from(token);
   return a.length === b.length && timingSafeEqual(a, b);
 }
 

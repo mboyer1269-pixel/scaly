@@ -1,6 +1,15 @@
 import { createHmac } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { twimlConnectRelay, twimlConnectStream, twimlDial, twimlFallbackTransfer, validateTwilioSignature, xmlEscape } from "@/server/twilio";
+import {
+  relaySessionToken,
+  twimlConnectRelay,
+  twimlConnectStream,
+  twimlDial,
+  twimlFallbackTransfer,
+  validateTwilioSignature,
+  verifyRelaySessionToken,
+  xmlEscape,
+} from "@/server/twilio";
 
 describe("TwiML", () => {
   it("échappe le XML (jamais d'injection via nom d'entreprise ou paramètre)", () => {
@@ -73,5 +82,20 @@ describe("signature Twilio", () => {
     expect(validateTwilioSignature(token, url, params, "fausse_signature")).toBe(false);
     expect(validateTwilioSignature("autre_token", url, params, sign(token, url, params))).toBe(false);
     expect(validateTwilioSignature(token, url, { ...params, From: "+10000000000" }, sign(token, url, params))).toBe(false);
+  });
+});
+
+describe("signature ConversationRelay", () => {
+  const secret = "relay_shared_secret";
+  const identity = { companyId: "comp_belair", callSid: "CA123", from: "+15145550182" };
+
+  it("signe le trio tenant/appel/appelant et refuse les paramètres altérés", () => {
+    const token = relaySessionToken(secret, identity);
+
+    expect(verifyRelaySessionToken(secret, identity, token)).toBe(true);
+    expect(verifyRelaySessionToken(secret, { ...identity, companyId: "comp_rivnord" }, token)).toBe(false);
+    expect(verifyRelaySessionToken(secret, { ...identity, callSid: "CA999" }, token)).toBe(false);
+    expect(verifyRelaySessionToken(secret, { ...identity, from: "+15145550000" }, token)).toBe(false);
+    expect(verifyRelaySessionToken("wrong_secret", identity, token)).toBe(false);
   });
 });

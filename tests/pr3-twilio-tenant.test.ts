@@ -1,6 +1,7 @@
 import { createHmac } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { InMemoryStore } from "@/server/store";
+import { verifyRelaySessionToken } from "@/server/twilio";
 
 const ORIGINAL_ENV = { ...process.env };
 
@@ -154,5 +155,34 @@ describe("PR3 Twilio tenant routing", () => {
     expect(audit).toEqual(expect.arrayContaining([
       expect.objectContaining({ companyId: "comp_rivnord", event: "dialogue_proprietaire" }),
     ]));
+  });
+
+  it("signe la session ConversationRelay avec le tenant, l'appel et l'appelant", async () => {
+    process.env.STORE_PROVIDER = "memory";
+    process.env.TWILIO_AUTH_TOKEN = "twilio_test_token";
+    process.env.SCALY_PUBLIC_URL = "https://scaly.test";
+    process.env.SCALY_VOICE_ENGINE = "relay";
+    process.env.SCALY_RELAY_WS_URL = "wss://relay.scaly.test/relay";
+    process.env.REALTIME_SHARED_SECRET = "relay_shared_secret";
+    await storeWithTwilioNumbers();
+
+    const { POST } = await import("@/app/api/voice/incoming/route");
+    const res = await POST(twilioRequest("/api/voice/incoming", {
+      CallSid: "CA_RELAY_SIGNED",
+      From: "+15145550111",
+      To: "+15145550002",
+      Called: "+15145550002",
+    }));
+    const xml = await res.text();
+    const token = xml.match(/<Parameter name="relayToken" value="([^"]+)" \/>/)?.[1];
+
+    expect(res.status).toBe(200);
+    expect(xml).toContain("<ConversationRelay");
+    expect(token).toBeTruthy();
+    expect(verifyRelaySessionToken(
+      "relay_shared_secret",
+      { companyId: "comp_rivnord", callSid: "CA_RELAY_SIGNED", from: "+15145550111" },
+      token ?? "",
+    )).toBe(true);
   });
 });

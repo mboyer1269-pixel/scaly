@@ -64,6 +64,7 @@ Garde-fous à conserver :
 - le webhook voix continue de résoudre le tenant par numéro appelé (`To`/`Called`);
 - les numéros absents, non mappés ou ambigus restent refusés;
 - le repli humain reste intact quand aucun transport realtime n'est configuré;
+- `REALTIME_SHARED_SECRET` signe la session relay (`companyId` + `callSid` + `from`) et le serveur relay refuse les sessions production sans secret;
 - le relay persiste via `/api/voice/complete`, comme le champion;
 - les mesures `RelayLatencyMeter` couvrent seulement transcript reçu -> premier jeton texte. Elles ne mesurent pas l'ASR final ni la synthèse Twilio.
 
@@ -82,6 +83,7 @@ SCALY_RELAY_LANGUAGE=fr-CA
 SCALY_RELAY_TTS_PROVIDER=Amazon
 SCALY_RELAY_VOICE=Gabrielle-Neural
 SCALY_RELAY_STT_PROVIDER=Google
+REALTIME_SHARED_SECRET=<meme-secret-app-et-relay>
 ```
 
 Retour au champion : retirer `SCALY_VOICE_ENGINE` et redémarrer l'app.

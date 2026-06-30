@@ -7,6 +7,7 @@
  */
 import { createServer } from "node:http";
 import { WebSocketServer, WebSocket } from "ws";
+import { verifyRelaySessionToken } from "../src/server/twilio";
 import { buildRealtimePrompt } from "../src/services/voice-prompt";
 import type { Company } from "../src/domain/company";
 import type { VoiceAgentConfig } from "../src/domain/agent";
@@ -27,7 +28,8 @@ const APP_URL = process.env.SCALY_APP_URL ?? "http://localhost:3000";
 const SECRET = process.env.REALTIME_SHARED_SECRET;
 const MODEL = process.env.SCALY_RELAY_LLM_MODEL ?? "gpt-4.1-mini";
 
-const configured = Boolean(process.env.OPENAI_API_KEY);
+const production = process.env.NODE_ENV === "production";
+const configured = Boolean(process.env.OPENAI_API_KEY) && (!production || Boolean(SECRET));
 
 interface SessionLog {
   callSid: string;
@@ -152,16 +154,23 @@ function handleRelayConnection(relayWs: WebSocket): void {
 
     if (msg.type === "setup") {
       const p = msg.customParameters ?? {};
+      const companyId = p.companyId ?? "";
+      const from = p.from ?? msg.from ?? "inconnu";
       log = {
         callSid: msg.callSid,
-        from: msg.from ?? p.from ?? "inconnu",
-        companyId: p.companyId ?? "",
+        from,
+        companyId,
         startedAt: new Date().toISOString(),
         turns: [],
         transferred: false,
       };
       if (!configured) {
         console.error("[relay] OPENAI_API_KEY absent — session refusée.");
+        relayWs.close();
+        return;
+      }
+      if (SECRET && !verifyRelaySessionToken(SECRET, { companyId, callSid: msg.callSid, from }, p.relayToken ?? "")) {
+        console.error(`[relay] Token de session invalide pour ${msg.callSid}.`);
         relayWs.close();
         return;
       }
@@ -264,7 +273,9 @@ const server = createServer((req, res) => {
         configured,
         detail: configured
           ? `Prêt — prototype ConversationRelay, modèle ${MODEL}, app ${APP_URL}`
-          : "OPENAI_API_KEY absent : les sessions sont refusées. Le webhook doit garder le repli <Dial> disponible.",
+          : production && !SECRET
+            ? "REALTIME_SHARED_SECRET absent en production : les sessions sont refusées."
+            : "OPENAI_API_KEY absent : les sessions sont refusées. Le webhook doit garder le repli <Dial> disponible.",
       }),
     );
     return;

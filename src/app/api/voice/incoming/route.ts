@@ -9,7 +9,7 @@
  * local), la vérification est sautée et tracée dans l'audit.
  */
 import { getStore } from "@/server/store";
-import { twimlConnectRelay, twimlConnectStream, twimlFallbackTransfer, validateTwilioSignature } from "@/server/twilio";
+import { relaySessionToken, twimlConnectRelay, twimlConnectStream, twimlFallbackTransfer, validateTwilioSignature } from "@/server/twilio";
 import { resolveTwilioTenant } from "@/server/twilio-tenant";
 import { getScriptById } from "@/data/industry-scripts";
 import { intelligenceEngine } from "@/services/intelligence";
@@ -156,6 +156,14 @@ export async function POST(req: Request) {
         event: "prototype_relay_servi",
         detail: `${callSid} -> ConversationRelay (${process.env.SCALY_RELAY_TTS_PROVIDER ?? "Amazon"}/${process.env.SCALY_RELAY_VOICE ?? "Gabrielle-Neural"})`,
       });
+      const relayParameters: Record<string, string> = { companyId: resolved.company.id, callSid, from, greeting };
+      if (process.env.REALTIME_SHARED_SECRET) {
+        relayParameters.relayToken = relaySessionToken(process.env.REALTIME_SHARED_SECRET, {
+          companyId: resolved.company.id,
+          callSid,
+          from,
+        });
+      }
       return xml(
         twimlConnectRelay(
           relayWsUrl,
@@ -167,7 +175,7 @@ export async function POST(req: Request) {
             transcriptionProvider: process.env.SCALY_RELAY_STT_PROVIDER ?? "Google",
             speechModel: process.env.SCALY_RELAY_SPEECH_MODEL,
           },
-          { companyId: resolved.company.id, callSid, from, greeting },
+          relayParameters,
         ),
       );
     }
