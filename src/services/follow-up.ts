@@ -13,6 +13,7 @@ import { canonicalPhone } from "@/domain/consent";
 import { newId } from "@/lib/format";
 
 export const FOLLOW_UP_AFTER_DAYS = 2;
+const RETRYABLE_FOLLOW_UP_STATUSES = new Set<ScalyAction["status"]>(["pending", "failed", "requires_config"]);
 
 /** Clés de champ acceptées comme consentement (capté verbatim par l'agente). */
 const CONSENT_KEYS = ["consentement_rappel", "callback_consent", "consentement"];
@@ -21,6 +22,32 @@ const CONSENT_YES = /^(oui|yes|ok|d'accord|daccord|parfait|certainement|bien sû
 export function hasCallbackConsent(call: Call): boolean {
   const fields = call.intelligence?.collectedFields ?? {};
   return CONSENT_KEYS.some((k) => fields[k] && CONSENT_YES.test(fields[k].trim()));
+}
+
+export function isQuoteFollowUpAction(action: ScalyAction): boolean {
+  return action.type === "send_sms" && action.payload?.kind === "suivi_soumission";
+}
+
+export function quoteFollowUpsToExecute(
+  actions: ScalyAction[],
+  revokedPhones: Set<string> = new Set(),
+): ScalyAction[] {
+  return actions.filter((action) => {
+    if (!isQuoteFollowUpAction(action) || !RETRYABLE_FOLLOW_UP_STATUSES.has(action.status)) return false;
+    const to = typeof action.payload.to === "string" ? action.payload.to : "";
+    return !revokedPhones.has(canonicalPhone(to));
+  });
+}
+
+export function revokedQuoteFollowUps(
+  actions: ScalyAction[],
+  revokedPhones: Set<string>,
+): ScalyAction[] {
+  return actions.filter((action) => {
+    if (!isQuoteFollowUpAction(action) || !RETRYABLE_FOLLOW_UP_STATUSES.has(action.status)) return false;
+    const to = typeof action.payload.to === "string" ? action.payload.to : "";
+    return revokedPhones.has(canonicalPhone(to));
+  });
 }
 
 /**
