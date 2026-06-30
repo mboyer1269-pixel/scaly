@@ -2,7 +2,7 @@
   "name": "scaly",
   "version": "0.1.0",
   "private": true,
-  "description": "Scaly — plateforme de réceptionniste vocale IA pour PME francophones et bilingues",
+  "description": "Scaly — plateforme de réceptionniste vocale IA bilingue pour PME au Québec et en Ontario",
   "scripts": {
     "dev": "next dev",
     "app:local": "node --import=tsx scripts/app-local.ts",

@@ -1,13 +1,15 @@
 <div align="center">
   <h1>Allô Maude</h1>
-  <p><strong>Réceptionniste vocale à intelligence artificielle pour les petites et moyennes entreprises de services au Québec.</strong></p>
-  <p>Allô Maude est l’expérience commerciale. Scaly est le moteur technique qui orchestre la voix, l’analyse, les suivis, la conformité et la persistance.</p>
+  <p><strong>Le standard bilingue qui répond, qualifie et passe le relais pour les petites et moyennes entreprises de services au Québec et en Ontario.</strong></p>
+  <p>Allô Maude est la marque publique. Scaly est le moteur technique qui orchestre la voix, l’analyse, les suivis, la conformité et la persistance.</p>
+  <p><strong><code>allomaude.ca</code> · <code>allomaude.com</code></strong></p>
   <p>
     <a href="https://scaly-sigma.vercel.app"><img alt="Production Vercel" src="https://img.shields.io/badge/production-Vercel-000000?logo=vercel" /></a>
     <a href="https://github.com/mboyer1269-pixel/scaly/actions/workflows/ci.yml"><img alt="Intégration continue" src="https://github.com/mboyer1269-pixel/scaly/actions/workflows/ci.yml/badge.svg?branch=main" /></a>
     <img alt="Tests" src="https://img.shields.io/badge/tests-274%20passing-16a34a" />
     <img alt="Postgres" src="https://img.shields.io/badge/persistence-Neon%20Postgres-00e599" />
     <img alt="Voix" src="https://img.shields.io/badge/voix-repli%20humain%20v%C3%A9rifi%C3%A9-0f766e" />
+    <img alt="Domaines" src="https://img.shields.io/badge/domaines-attach%C3%A9s%20%C3%A0%20Vercel-7057c8" />
   </p>
 </div>
 
@@ -22,6 +24,7 @@ Le principe de base est strict : le produit ne prétend jamais qu’un élément
 | Surface | État actuel | Preuve |
 |---|---|---|
 | Production web | Déployée sur Vercel | [scaly-sigma.vercel.app](https://scaly-sigma.vercel.app) |
+| Domaines de marque | Attachés au projet Vercel, DNS à configurer | `allomaude.ca`, `allomaude.com`, `www.allomaude.ca`, `www.allomaude.com` |
 | Intégration continue (CI) | Verte sur `main` | `npm run typecheck`, `npm test`, `npm run build` |
 | Tests automatisés | 274 tests passent | Vitest, 36 fichiers de tests |
 | Persistance | Neon PostgreSQL via Prisma | `verifyLive()` écrit, relit et supprime une sentinelle |
@@ -30,6 +33,40 @@ Le principe de base est strict : le produit ne prétend jamais qu’un élément
 | Tenant Twilio | Résolu par numéro appelé `To` ou `Called` | `Company.twilioPhoneNumber` |
 | Premier appel réel | Vérifié en repli humain | appel `source:"live"` et preuve `live_call` |
 | Vercel Cron | Déclaré et actif | `/api/cron/purge`, `/api/cron/digest` |
+
+## Signature Allô Maude
+
+| Élément | Direction |
+|---|---|
+| Positionnement | réception vocale premium, bilingue et vérifiable pour PME de services |
+| Promesse | chaque appel devient une suite claire : transfert, action, suivi ou correction |
+| Ton | français québécois solide, anglais canadien naturel, direct et calme sous pression |
+| Design | standard téléphonique moderne : signaux live, preuves visibles, contrastes francs |
+| Marchés initiaux | Québec first, Ontario ready |
+| Domaine principal | `allomaude.ca` |
+| Domaine secondaire | `allomaude.com` |
+
+## Positionnement marché
+
+Allô Maude ne doit pas être enfermée dans un seul marché linguistique. La stratégie produit est bilingue dès le départ :
+
+| Axe | Lecture stratégique | Source |
+|---|---|---|
+| Québec | Marché d’ancrage : forte réalité francophone et bilinguisme FR/EN élevé | [Statistique Canada, indicateurs linguistiques 2021](https://www.statcan.gc.ca/en/subjects-start/languages) |
+| Ontario | Marché d’expansion : majorité anglophone, présence francophone reconnue et besoin de service bilingue dans plusieurs contextes | [Loi sur les services en français, Ontario](https://www.ontario.ca/laws/statute/90f32) |
+| Canada | Français et anglais restent les deux langues d’inclusion commerciale les plus structurantes | [Patrimoine canadien, statistiques sur les langues officielles](https://www.canada.ca/en/canadian-heritage/services/official-languages-bilingualism/publications/statistics.html) |
+| Conformité Québec | Le français doit rester sérieux, visible et prioritaire dans l’expérience québécoise | [Charte de la langue française, Québec](https://www.legisquebec.gouv.qc.ca/en/document/cs/c-11) |
+
+## Domaines de marque
+
+Les domaines sont ajoutés au projet Vercel `scaly`, mais ils ne résolvent pas encore tant que le registrar ne pointe pas vers Vercel.
+
+| Domaine | Statut Vercel | DNS à poser selon Vercel CLI |
+|---|---|---|
+| `allomaude.ca` | attaché, non configuré | `A allomaude.ca 76.76.21.21` |
+| `allomaude.com` | attaché, non configuré | `A allomaude.com 76.76.21.21` |
+| `www.allomaude.ca` | attaché, non configuré | `A www.allomaude.ca 76.76.21.21` |
+| `www.allomaude.com` | attaché, non configuré | `A www.allomaude.com 76.76.21.21` |
 
 ## Preuve terrain
 

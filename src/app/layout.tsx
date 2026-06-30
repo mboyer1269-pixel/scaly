@@ -5,9 +5,9 @@ import { isAuthEnabled } from "@/server/auth";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Allô Maude — Réceptionniste virtuelle pour PME",
+  title: "Allô Maude — Réceptionniste vocale bilingue pour PME",
   description:
-    "Allô Maude répond aux appels de votre PME, qualifie les demandes et prépare les suivis. Français québécois et anglais.",
+    "Allô Maude répond aux appels de votre PME, qualifie les demandes et prépare les suivis au Québec et en Ontario. Français québécois et anglais canadien.",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
