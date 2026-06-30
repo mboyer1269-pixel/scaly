@@ -24,7 +24,8 @@ This branch focuses on integration safety:
 - ROI provenance on the dashboard;
 - schema comment truthfulness;
 - ConversationRelay A/B prototype rebased without regressing the champion voice path;
-- public-route and readiness audit.
+- public-route and readiness audit;
+- automated public-route contract tests in `tests/public-route-contract.test.ts`.
 
 ## Public Route Matrix
 
