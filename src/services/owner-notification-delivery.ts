@@ -84,6 +84,9 @@ export interface DeliverOptions {
   repo?: OwnerNotificationRepository;
 }
 
+/** Une réservation de livraison plus vieille que ceci est réputée périmée (process mort) et reprise. */
+export const DELIVERY_CLAIM_TTL_MS = 15 * 60 * 1000;
+
 /**
  * Livre UNE notification pending. Anti double-envoi : si elle n'est plus
  * pending, elle est retournée sans nouvel envoi. Un port qui jette n'échoue
@@ -101,9 +104,12 @@ export async function deliverPendingOwnerNotification(
   if (!current || current.companyId !== companyId) throw new Error("Notification introuvable.");
   if (current.status !== "pending") return current; // déjà traitée : jamais de double-envoi.
 
-  // Réservation ATOMIQUE avant l'envoi (pending -> sent). Si un autre passage
-  // l'a déjà réservée, on n'envoie PAS : pas de double SMS concurrent.
-  const claimed = await repo.claimForDelivery(companyId, id, now.toISOString());
+  // Réservation ATOMIQUE avant l'envoi. Le statut reste `pending` (pas de
+  // « sent » fantôme si le process meurt avant l'envoi) ; seule la fenêtre
+  // `deliveryClaimedAt` protège du double SMS concurrent, et une réservation
+  // périmée est reprise au prochain passage.
+  const staleBefore = new Date(now.getTime() - DELIVERY_CLAIM_TTL_MS).toISOString();
+  const claimed = await repo.claimForDelivery(companyId, id, now.toISOString(), staleBefore);
   if (!claimed) return (await repo.get(id)) ?? current;
 
   let result: OwnerNotificationDeliveryResult;

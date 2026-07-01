@@ -62,11 +62,17 @@ export class PrismaOwnerNotificationRepository implements OwnerNotificationRepos
     return notification;
   }
 
-  async claimForDelivery(companyId: string, id: string, nowIso: string): Promise<boolean> {
-    // Réservation atomique : seule la ligne encore `pending` bascule. count===1 => réservée par nous.
+  async claimForDelivery(companyId: string, id: string, nowIso: string, staleBeforeIso: string): Promise<boolean> {
+    // Réservation atomique : encore `pending` ET (jamais réservée OU réservation périmée).
+    // Le statut reste `pending` jusqu'à l'envoi réel — pas de « sent » fantôme.
     const { count } = await prisma.ownerNotification.updateMany({
-      where: { id, companyId, status: "pending" },
-      data: { status: "sent", sentAt: new Date(nowIso), updatedAt: new Date(nowIso) },
+      where: {
+        id,
+        companyId,
+        status: "pending",
+        OR: [{ deliveryClaimedAt: null }, { deliveryClaimedAt: { lte: new Date(staleBeforeIso) } }],
+      },
+      data: { deliveryClaimedAt: new Date(nowIso), updatedAt: new Date(nowIso) },
     });
     return count === 1;
   }

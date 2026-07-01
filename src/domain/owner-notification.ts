@@ -38,6 +38,8 @@ export interface OwnerNotification {
   updatedAt: string;
   sentAt?: string;
   dismissedAt?: string;
+  /** Horodatage de réservation pour livraison (verrou anti double-envoi, repris si périmé). */
+  deliveryClaimedAt?: string;
   /** Identifiant retourné par le provider de livraison (ex. SID Twilio), si envoyé. */
   providerMessageId?: string;
   /** Raison d'échec de livraison, si le port a échoué. Jamais un secret. */

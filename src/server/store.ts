@@ -77,6 +77,8 @@ export interface ScalyRepository {
   updateAgent(companyId: string, patch: Partial<VoiceAgentConfig>): Promise<VoiceAgentConfig | undefined>;
   listCalls(companyId?: string): Promise<Call[]>;
   getCall(id: string): Promise<Call | undefined>;
+  /** Retrouve un appel par son identifiant externe (ex. callSid Twilio) pour l'idempotence. */
+  findCallByExternalId(companyId: string, externalId: string): Promise<Call | undefined>;
   addCall(call: Call, actions: ScalyAction[]): Promise<void>;
   /** Persiste un appel modifié (ex. ré-analyse LLM, purge de transcript). */
   saveCall(call: Call): Promise<Call>;
@@ -196,6 +198,12 @@ export class InMemoryStore implements ScalyRepository {
 
   async getCall(id: string): Promise<Call | undefined> {
     return this.calls.get(id);
+  }
+
+  async findCallByExternalId(companyId: string, externalId: string): Promise<Call | undefined> {
+    return [...this.calls.values()].find(
+      (c) => c.companyId === companyId && c.provenance?.externalId === externalId,
+    );
   }
 
   async addCall(call: Call, actions: ScalyAction[]): Promise<void> {

@@ -155,6 +155,7 @@ export function callToDb(c: Call): Prisma.CallCreateManyInput {
     transcript: asJson(c.transcript),
     intelligence: c.intelligence ? asJson(c.intelligence) : Prisma.JsonNull,
     recordingUrl: c.recordingUrl,
+    provenance: c.provenance ? asJson(c.provenance) : Prisma.DbNull,
   };
 }
 
@@ -176,6 +177,7 @@ export function callFromDb(row: CallRow): Call {
     transcript: row.transcript as unknown as TranscriptTurn[],
     intelligence: (row.intelligence as unknown as CallIntelligence | null) ?? undefined,
     recordingUrl: null,
+    provenance: (row.provenance as unknown as Call["provenance"] | null) ?? undefined,
   };
 }
 
@@ -366,6 +368,13 @@ export class PrismaStore implements ScalyRepository {
 
   async getCall(id: string): Promise<Call | undefined> {
     const row = await prisma.call.findUnique({ where: { id } });
+    return row ? callFromDb(row) : undefined;
+  }
+
+  async findCallByExternalId(companyId: string, externalId: string): Promise<Call | undefined> {
+    const row = await prisma.call.findFirst({
+      where: { companyId, provenance: { path: ["externalId"], equals: externalId } },
+    });
     return row ? callFromDb(row) : undefined;
   }
 

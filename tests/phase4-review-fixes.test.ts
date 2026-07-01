@@ -69,26 +69,39 @@ describe("Privacy : deleteCompanyData efface aussi les moteurs Phase 4", () => {
   });
 });
 
-describe("claimForDelivery : réservation atomique anti double-envoi", () => {
-  it("ne réserve qu'une fois, scope le tenant", async () => {
+const STALE = "2026-07-01T11:45:00.000Z"; // 15 min avant NOW
+
+describe("claimForDelivery : réservation non-terminale, anti double-envoi", () => {
+  it("réserve sans marquer sent (statut reste pending), une seule fois, scope le tenant", async () => {
     const repo = new InMemoryOwnerNotificationRepository();
     const n = await createPostCallNotification("comp_x", { summary: "s", recommendedAction: "a", urgency: "haute" }, { now: NOW, repo });
 
-    expect(await repo.claimForDelivery("comp_x", n.id, ISO)).toBe(true);
-    expect((await repo.get(n.id))?.status).toBe("sent");
-    // Deuxième tentative : déjà réservée.
-    expect(await repo.claimForDelivery("comp_x", n.id, ISO)).toBe(false);
+    expect(await repo.claimForDelivery("comp_x", n.id, ISO, STALE)).toBe(true);
+    const claimed = await repo.get(n.id);
+    expect(claimed?.status).toBe("pending"); // pas de « sent » fantôme
+    expect(claimed?.deliveryClaimedAt).toBe(ISO);
+    // Deuxième tentative fraîche : déjà réservée.
+    expect(await repo.claimForDelivery("comp_x", n.id, ISO, STALE)).toBe(false);
     // Mauvais tenant / id inexistant.
     const n2 = await createPostCallNotification("comp_x", { summary: "s", recommendedAction: "a", urgency: "haute" }, { now: NOW, repo });
-    expect(await repo.claimForDelivery("comp_autre", n2.id, ISO)).toBe(false);
-    expect(await repo.claimForDelivery("comp_x", "inexistant", ISO)).toBe(false);
+    expect(await repo.claimForDelivery("comp_autre", n2.id, ISO, STALE)).toBe(false);
+    expect(await repo.claimForDelivery("comp_x", "inexistant", ISO, STALE)).toBe(false);
   });
 
-  it("une notif déjà réservée par un autre passage n'est PAS renvoyée", async () => {
+  it("reprend une réservation périmée (process mort avant l'envoi)", async () => {
     const repo = new InMemoryOwnerNotificationRepository();
     const n = await createPostCallNotification("comp_x", { summary: "s", recommendedAction: "a", urgency: "haute" }, { now: NOW, repo });
-    // Simule un premier cron qui a déjà réservé la notif.
-    await repo.claimForDelivery("comp_x", n.id, ISO);
+    // Première réservation à 10:00 (process qui meurt ensuite).
+    expect(await repo.claimForDelivery("comp_x", n.id, "2026-07-01T10:00:00.000Z", "2026-07-01T09:00:00.000Z")).toBe(true);
+    // Passage suivant : la réservation de 10:00 est périmée (<= 11:45) → reprise.
+    expect(await repo.claimForDelivery("comp_x", n.id, ISO, STALE)).toBe(true);
+  });
+
+  it("une notif déjà réservée fraîchement n'est PAS renvoyée", async () => {
+    const repo = new InMemoryOwnerNotificationRepository();
+    const n = await createPostCallNotification("comp_x", { summary: "s", recommendedAction: "a", urgency: "haute" }, { now: NOW, repo });
+    // Simule un premier cron qui a déjà réservé la notif (statut reste pending).
+    await repo.claimForDelivery("comp_x", n.id, ISO, STALE);
 
     let sends = 0;
     const delivery: OwnerNotificationDelivery = {
@@ -98,8 +111,8 @@ describe("claimForDelivery : réservation atomique anti double-envoi", () => {
       },
     };
     const out = await deliverPendingOwnerNotification("comp_x", n.id, delivery, { now: NOW, repo });
-    expect(sends).toBe(0); // aucun second envoi
-    expect(out.status).toBe("sent");
+    expect(sends).toBe(0); // aucun second envoi concurrent
+    expect(out.status).toBe("pending"); // pas envoyée par CE passage
   });
 });
 
@@ -121,7 +134,10 @@ describe("Idempotence appel : provenance.externalId (callSid)", () => {
       provenance: { provider: "twilio", externalId: "CA_test_sid" },
     };
     await store.addCall(call, []);
-    const found = (await store.listCalls(DEFAULT_COMPANY_ID)).find((c) => c.provenance?.externalId === "CA_test_sid");
+    const found = await store.findCallByExternalId(DEFAULT_COMPANY_ID, "CA_test_sid");
     expect(found?.id).toBe("call_sid_1");
+    // Scope tenant + callSid inconnu.
+    expect(await store.findCallByExternalId("comp_autre", "CA_test_sid")).toBeUndefined();
+    expect(await store.findCallByExternalId(DEFAULT_COMPANY_ID, "inconnu")).toBeUndefined();
   });
 });

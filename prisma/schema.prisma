@@ -117,6 +117,7 @@ model Call {
   transcript   Json     // TranscriptTurn[]
   intelligence Json?    // CallIntelligence
   recordingUrl String?
+  provenance   Json?    // { provider?, externalId? (ex. callSid Twilio), verifiedAt? } — idempotence
 
   company Company  @relation(fields: [companyId], references: [id])
   actions Action[]
@@ -263,6 +264,7 @@ model OwnerNotification {
   updatedAt            DateTime
   sentAt               DateTime?
   dismissedAt          DateTime?
+  deliveryClaimedAt    DateTime?
   providerMessageId    String?
   failureReason        String?
 

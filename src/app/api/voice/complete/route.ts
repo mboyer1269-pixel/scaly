@@ -61,7 +61,7 @@ export async function POST(req: Request) {
   // Idempotence : un retry Twilio réutilise le même callSid. Ne recrée ni appel,
   // ni notification, ni demande d'avis, ni audit — retourne l'appel existant.
   if (body.callSid) {
-    const existing = (await store.listCalls(company.id)).find((c) => c.provenance?.externalId === body.callSid);
+    const existing = await store.findCallByExternalId(company.id, body.callSid);
     if (existing) {
       return NextResponse.json({ callId: existing.id, actionsPlanned: 0, idempotent: true });
     }
