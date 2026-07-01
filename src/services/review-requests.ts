@@ -41,8 +41,13 @@ export class InMemoryReviewRequestRepository implements ReviewRequestRepository 
 
 export function getReviewRequestRepository(): ReviewRequestRepository {
   const g = globalThis as { __scalyReviewRequests?: ReviewRequestRepository };
-  if (!g.__scalyReviewRequests) g.__scalyReviewRequests = new InMemoryReviewRequestRepository();
-  return g.__scalyReviewRequests;
+  if (g.__scalyReviewRequests) return g.__scalyReviewRequests;
+  const repo: ReviewRequestRepository =
+    process.env.STORE_PROVIDER === "prisma"
+      ? new (require("../server/prisma-phase4-repos").PrismaReviewRequestRepository)()
+      : new InMemoryReviewRequestRepository();
+  g.__scalyReviewRequests = repo;
+  return repo;
 }
 
 export interface ReviewEligibility {
