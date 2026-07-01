@@ -10,6 +10,8 @@ import { getScriptById } from "@/data/industry-scripts";
 import { intelligenceEngine } from "@/services/intelligence";
 import { planActionsForCall } from "@/services/action-engine";
 import { consentFromCall } from "@/services/consent";
+import { createPostCallNotificationFromCall } from "@/services/post-call-notification";
+import { createReviewRequestFromCall, evaluateReviewEligibility } from "@/services/review-requests";
 import { isSmsConfigured, sendSms } from "@/adapters/integrations/twilio-sms";
 import { newId } from "@/lib/format";
 import type { Call, TranscriptTurn } from "@/domain/call";
@@ -124,6 +126,20 @@ export async function POST(req: Request) {
     event: "appel_live_persisté",
     detail: `${call.id} (Twilio ${body.callSid ?? "?"}) · ${turns.length} tours · ${measured.length} latence(s) réelle(s)${measured.length ? ` · p. ex. ${measured[0].perceivedMs} ms` : ""}`,
   });
+
+  // Pipeline post-appel (PR #25→#27) — best-effort, JAMAIS bloquant : ne touche
+  // ni le transfert ni le fallback humain déjà exécutés plus haut.
+  try {
+    await createPostCallNotificationFromCall(call);
+  } catch {
+    // L'alerte owner est secondaire : l'appel reste persisté quoi qu'il arrive.
+  }
+  try {
+    // Preuve sociale : uniquement les appels résolus/positifs (garde-fou du moteur).
+    if (evaluateReviewEligibility(call).eligible) await createReviewRequestFromCall(call, company);
+  } catch {
+    // La demande d'avis est secondaire — non bloquante.
+  }
 
   return NextResponse.json({ callId: call.id, actionsPlanned: actions.length, measuredLatencies: measured.length });
 }
