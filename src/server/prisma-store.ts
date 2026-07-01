@@ -394,6 +394,26 @@ export class PrismaStore implements ScalyRepository {
     return call;
   }
 
+  async saveCallUnlessFinalized(call: Call): Promise<boolean> {
+    const data = callToDb(call);
+    const { id: _id, ...update } = data;
+    // Atomique côté SQL : l'UPDATE ne matche que si le statut est encore
+    // in_progress — impossible d'écraser un appel finalisé, même en course.
+    const updated = await prisma.call.updateMany({ where: { id: call.id, status: "in_progress" }, data: update });
+    if (updated.count > 0) return true;
+    const existing = await prisma.call.findUnique({ where: { id: call.id }, select: { id: true } });
+    if (existing) return false; // finalisé — le write s'efface
+    try {
+      await prisma.call.create({ data });
+      return true;
+    } catch {
+      // Course sur la création (contrainte d'unicité id) : on retente l'UPDATE
+      // conditionnel une fois ; s'il ne matche pas, un final a gagné.
+      const retry = await prisma.call.updateMany({ where: { id: call.id, status: "in_progress" }, data: update });
+      return retry.count > 0;
+    }
+  }
+
   async listActions(companyId?: string, callId?: string): Promise<ScalyAction[]> {
     const rows = await prisma.action.findMany({
       where: {

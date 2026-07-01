@@ -82,6 +82,13 @@ export interface ScalyRepository {
   addCall(call: Call, actions: ScalyAction[]): Promise<void>;
   /** Persiste un appel modifié (ex. ré-analyse LLM, purge de transcript). */
   saveCall(call: Call): Promise<Call>;
+  /**
+   * Write conditionnel anti-course : écrit l'appel SEULEMENT s'il est absent
+   * ou encore `in_progress`. Une finalisation concurrente (/complete, repli,
+   * balayeur) gagne TOUJOURS — un flush zombie ne peut jamais écraser un final.
+   * Retourne false si le write a été refusé.
+   */
+  saveCallUnlessFinalized(call: Call): Promise<boolean>;
   listActions(companyId?: string, callId?: string): Promise<ScalyAction[]>;
   getAction(id: string): Promise<ScalyAction | undefined>;
   /** Persiste une action mutée (ex. après executeAction). */
@@ -218,6 +225,13 @@ export class InMemoryStore implements ScalyRepository {
   async saveCall(call: Call): Promise<Call> {
     this.calls.set(call.id, call);
     return call;
+  }
+
+  async saveCallUnlessFinalized(call: Call): Promise<boolean> {
+    const existing = this.calls.get(call.id);
+    if (existing && existing.status !== "in_progress") return false;
+    this.calls.set(call.id, call);
+    return true;
   }
 
   async listActions(companyId?: string, callId?: string): Promise<ScalyAction[]> {

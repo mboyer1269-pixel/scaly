@@ -23,6 +23,7 @@ import {
   withRelayTtsRules,
 } from "./relay-protocol";
 import { createCheckpointer } from "./checkpoint";
+import { createCallCap, maxCallSecondsFromEnv } from "./call-cap";
 
 const PORT = Number(process.env.REALTIME_RELAY_PORT ?? 8082);
 const APP_URL = process.env.SCALY_APP_URL ?? "http://localhost:3000";
@@ -31,6 +32,7 @@ const MODEL = process.env.SCALY_RELAY_LLM_MODEL ?? "gpt-4.1-mini";
 
 const production = process.env.NODE_ENV === "production";
 const configured = Boolean(process.env.OPENAI_API_KEY) && (!production || Boolean(SECRET));
+const MAX_CALL_SECONDS = maxCallSecondsFromEnv();
 
 interface SessionLog {
   callSid: string;
@@ -148,6 +150,19 @@ function handleRelayConnection(relayWs: WebSocket): void {
   // Durabilité : chaque tour stable est flushé vers l'app — un crash du pont
   // ne perd plus le transcript, seulement les tours pas encore prononcés.
   const checkpointer = createCheckpointer({ appUrl: APP_URL, secret: SECRET, tag: "relay" });
+  // Plafond dur : coût borné par appel. Expiration → transfert humain ; si la
+  // redirection échoue, fermeture du WS → Twilio déclenche l'action <Connect>
+  // et le webhook sert le repli <Dial>. Jamais de simulation, jamais de vide.
+  const cap = createCallCap(MAX_CALL_SECONDS, () => {
+    void (async () => {
+      if (!log) return;
+      console.error(`[relay] Plafond de durée atteint (${MAX_CALL_SECONDS} s) pour ${log.callSid} — transfert humain.`);
+      log.transferred = true;
+      log.transferReason = `Durée maximale d'appel atteinte (${MAX_CALL_SECONDS} s).`;
+      const ok = transferPhone ? await redirectToHuman(log.callSid, transferPhone) : false;
+      if (!ok) relayWs.close();
+    })();
+  });
   const meter = new RelayLatencyMeter();
   const t0 = Date.now();
   const atMs = () => Date.now() - t0;
@@ -178,6 +193,7 @@ function handleRelayConnection(relayWs: WebSocket): void {
         relayWs.close();
         return;
       }
+      cap.start();
       void (async () => {
         try {
           const ctx = await fetchContext(log!.companyId, log!.from);
@@ -264,9 +280,15 @@ function handleRelayConnection(relayWs: WebSocket): void {
   });
 
   relayWs.on("close", () => {
+    cap.stop();
     inflight?.abort();
-    if (log && log.turns.length > 0) void postComplete(log);
-    else if (log) console.log(`[relay] Appel ${log.callSid} sans transcript — rien à persister.`);
+    if (log && log.turns.length > 0) {
+      const finalLog = log;
+      void (async () => {
+        await checkpointer.idle();
+        await postComplete(finalLog);
+      })();
+    } else if (log) console.log(`[relay] Appel ${log.callSid} sans transcript — rien à persister.`);
   });
 }
 

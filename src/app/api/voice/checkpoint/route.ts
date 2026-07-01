@@ -82,7 +82,13 @@ export async function POST(req: Request) {
     recordingUrl: null,
     provenance: { provider: "twilio", externalId: body.callSid, checkpointAt: now },
   };
-  await store.saveCall(call);
+  // Write conditionnel : ferme la course read-then-write — si une finalisation
+  // (/complete, repli, balayeur) atterrit entre le findCallByExternalId ci-dessus
+  // et ce write, le flush s'efface au lieu d'écraser le record final.
+  const written = await store.saveCallUnlessFinalized(call);
+  if (!written) {
+    return NextResponse.json({ callId: call.id, ignored: true });
+  }
 
   // Audit une seule fois par appel (au premier flush) — pas de spam à chaque tour.
   if (!existing) {

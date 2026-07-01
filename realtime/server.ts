@@ -32,6 +32,7 @@ import {
   TurnLatencyMeter,
 } from "./protocol";
 import { createCheckpointer } from "./checkpoint";
+import { createCallCap, maxCallSecondsFromEnv } from "./call-cap";
 
 const PORT = Number(process.env.REALTIME_PORT ?? 8081);
 const APP_URL = process.env.SCALY_APP_URL ?? "http://localhost:3000";
@@ -44,6 +45,7 @@ const MODEL = process.env.OPENAI_REALTIME_MODEL ?? "gpt-realtime";
 const VOICE = process.env.SCALY_REALTIME_VOICE ?? "marin";
 
 const configured = Boolean(process.env.OPENAI_API_KEY);
+const MAX_CALL_SECONDS = maxCallSecondsFromEnv();
 
 interface SessionLog {
   callSid: string;
@@ -110,6 +112,20 @@ function handleTwilioConnection(twilioWs: WebSocket): void {
   // Durabilité : chaque tour stable est flushé vers l'app — un crash du pont
   // ne perd plus le transcript, seulement les tours pas encore prononcés.
   const checkpointer = createCheckpointer({ appUrl: APP_URL, secret: SECRET, tag: "realtime" });
+  let transferPhone = "";
+  // Plafond dur : coût borné par appel. Expiration → transfert humain ; si la
+  // redirection échoue, fermeture du WS → Twilio déclenche l'action <Connect>
+  // et le webhook sert le repli <Dial>. Jamais de simulation, jamais de vide.
+  const cap = createCallCap(MAX_CALL_SECONDS, () => {
+    void (async () => {
+      if (!log) return;
+      console.error(`[realtime] Plafond de durée atteint (${MAX_CALL_SECONDS} s) pour ${log.callSid} — transfert humain.`);
+      log.transferred = true;
+      log.transferReason = `Durée maximale d'appel atteinte (${MAX_CALL_SECONDS} s).`;
+      const ok = transferPhone ? await redirectToHuman(log.callSid, transferPhone) : false;
+      if (!ok) twilioWs.close();
+    })();
+  });
   const meter = new TurnLatencyMeter();
   let pendingLatency: VoiceTurnLatency | null = null;
   const t0 = Date.now();
@@ -135,12 +151,14 @@ function handleTwilioConnection(twilioWs: WebSocket): void {
         twilioWs.close();
         return;
       }
+      cap.start();
       void (async () => {
         try {
           // Contexte + dossier client réel (historique du numéro) : on CONFIRME
           // le numéro au lieu de le faire dicter, et « comme la dernière fois »
           // n'existe QUE si l'historique existe (appels réels n° 2 et 3).
           const ctx = await fetchContext(log!.companyId, log!.from);
+          transferPhone = ctx.company.transferPhone;
           const prompt = buildRealtimePrompt({ ...ctx, callerNumber: log!.from });
           // API GA : pas de header OpenAI-Beta (rejeté par le GA).
           openaiWs = new WebSocket(`wss://api.openai.com/v1/realtime?model=${encodeURIComponent(MODEL)}`, {
@@ -223,13 +241,20 @@ function handleTwilioConnection(twilioWs: WebSocket): void {
     }
 
     if (msg.event === "stop") {
+      cap.stop();
       openaiWs?.close();
-      if (log && log.turns.length > 0) void postComplete(log);
-      else if (log) console.log(`[realtime] Appel ${log.callSid} sans transcript — rien à persister.`);
+      if (log && log.turns.length > 0) {
+        const finalLog = log;
+        void (async () => {
+          await checkpointer.idle();
+          await postComplete(finalLog);
+        })();
+      } else if (log) console.log(`[realtime] Appel ${log.callSid} sans transcript — rien à persister.`);
     }
   });
 
   twilioWs.on("close", () => {
+    cap.stop();
     openaiWs?.close();
   });
 }

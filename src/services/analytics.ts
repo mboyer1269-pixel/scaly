@@ -32,7 +32,8 @@ export function computeDashboard(
   now = new Date(),
 ): DashboardData {
   const since = now.getTime() - periodDays * 24 * 3600 * 1000;
-  const inPeriod = calls.filter((c) => new Date(c.startedAt).getTime() >= since);
+  const finalCalls = calls.filter((c) => c.status !== "in_progress");
+  const inPeriod = finalCalls.filter((c) => new Date(c.startedAt).getTime() >= since);
   const baseline = getScriptByIndustry(company.industry).valueBaselineCad;
 
   const missedCalls = inPeriod.filter((c) => c.status === "missed");
