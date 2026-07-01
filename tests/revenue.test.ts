@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Call, CallIntelligence } from "@/domain/call";
+import type { ModelUsage } from "@/domain/model-usage";
 import { computeRevenueCounter } from "@/services/revenue";
 
 const NOW = new Date("2026-06-11T12:00:00Z");
@@ -86,5 +87,35 @@ describe("computeRevenueCounter", () => {
     expect(counter.estimatedMarginCad).toBe(-0.06);
     expect(counter.estimatedMarginRate).toBeNull();
     expect(counter.costPerProtectedDollarCad).toBeNull();
+  });
+
+  it("prefere les couts ModelUsage captures au proxy par duree", () => {
+    const saved = call({
+      id: "saved",
+      durationSec: 3600,
+      intelligence: intel({ saved: { reason: "hors_heures" }, estimatedValueCad: 1000 }),
+    });
+    const modelUsage: ModelUsage[] = [
+      {
+        id: "usage_1",
+        companyId: "comp_test",
+        callId: "saved",
+        provider: "openai",
+        model: "gpt-test",
+        feature: "call_analysis",
+        status: "succeeded",
+        startedAt: NOW.toISOString(),
+        latencyMs: 42,
+        attempt: 1,
+        tokens: { inputTokens: 100, outputTokens: 50, totalTokens: 150 },
+        estimatedCostCad: 0.25,
+      },
+    ];
+
+    const counter = computeRevenueCounter([saved], { now: NOW, modelUsage });
+
+    expect(counter.estimatedAiCostCad).toBe(0.25);
+    expect(counter.costedCallsCount).toBe(1);
+    expect(counter.assumption).toContain("usage(s) modele captures");
   });
 });

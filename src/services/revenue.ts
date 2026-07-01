@@ -7,7 +7,9 @@
  */
 import type { Call } from "@/domain/call";
 import type { RevenueCounter } from "@/domain/revenue";
+import type { ModelUsage } from "@/domain/model-usage";
 import { EST_AI_COST_PER_MINUTE_CAD } from "@/domain/billing";
+import { summarizeModelUsage } from "./model-gateway/observability";
 
 function money(value: number): number {
   return Math.round(value * 100) / 100;
@@ -23,7 +25,7 @@ function inTrailingPeriod(call: Call, sinceMs: number): boolean {
 
 export function computeRevenueCounter(
   calls: Call[],
-  opts: { periodDays?: number; now?: Date } = {},
+  opts: { periodDays?: number; now?: Date; modelUsage?: ModelUsage[] } = {},
 ): RevenueCounter {
   const periodDays = opts.periodDays ?? 14;
   const now = opts.now ?? new Date();
@@ -37,7 +39,8 @@ export function computeRevenueCounter(
   const protectedEstimatedCad = Math.max(0, protectedCad - protectedDeclaredCad);
   const costedCalls = inPeriod.filter((call) => call.durationSec > 0);
   const estimatedAiMinutes = Math.round(costedCalls.reduce((sum, call) => sum + call.durationSec / 60, 0) * 100) / 100;
-  const estimatedAiCostCad = money(estimatedAiMinutes * EST_AI_COST_PER_MINUTE_CAD);
+  const usageSummary = opts.modelUsage?.length ? summarizeModelUsage(opts.modelUsage) : null;
+  const estimatedAiCostCad = usageSummary ? usageSummary.estimatedCostCad : money(estimatedAiMinutes * EST_AI_COST_PER_MINUTE_CAD);
   const estimatedMarginCad = money(protectedCad - estimatedAiCostCad);
 
   return {
@@ -50,7 +53,9 @@ export function computeRevenueCounter(
     estimatedMarginCad,
     estimatedMarginRate: protectedCad > 0 ? ratio(estimatedMarginCad / protectedCad) : null,
     costPerProtectedDollarCad: protectedCad > 0 ? ratio(estimatedAiCostCad / protectedCad) : null,
-    costedCallsCount: costedCalls.length,
-    assumption: `Proxy de cout IA a ${EST_AI_COST_PER_MINUTE_CAD.toFixed(2)} $CA/min sur les appels avec duree connue; remplacable par ModelUsage provider reel.`,
+    costedCallsCount: usageSummary ? usageSummary.calls : costedCalls.length,
+    assumption: usageSummary
+      ? `Cout IA estime depuis ${usageSummary.calls} usage(s) modele captures; les montants restent estimatifs tant que les factures provider ne sont pas rapprochees.`
+      : `Proxy de cout IA a ${EST_AI_COST_PER_MINUTE_CAD.toFixed(2)} $CA/min sur les appels avec duree connue; remplacable par ModelUsage provider reel.`,
   };
 }

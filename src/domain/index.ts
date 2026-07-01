@@ -10,3 +10,5 @@ export * from "./integration";
 export * from "./review";
 export * from "./readiness";
 export * from "./revenue";
+export * from "./model-usage";
+export * from "./agent-trace";
