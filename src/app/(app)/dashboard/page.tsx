@@ -10,7 +10,9 @@ import { computeDashboard, computePhonePerformanceScore } from "@/services/analy
 import { computeRevenueCounter } from "@/services/revenue";
 import { computeRescueQueue, computeRoiSnapshot } from "@/services/rescue";
 import { listOwnerNotifications } from "@/services/owner-notifications";
+import { listReviewRequests } from "@/services/review-requests";
 import { OwnerActionsCard } from "@/components/OwnerActionsCard";
+import { ReviewRequestsCard } from "@/components/ReviewRequestsCard";
 import { Badge, Card, EmptyState, PageHeader, Stat } from "@/components/ui";
 import { callStatusBadge, leadBadge, urgencyBadge } from "@/lib/labels";
 import { INTENT_LABELS, NEXT_ACTION_LABELS } from "@/domain/call";
@@ -37,10 +39,11 @@ export default async function DashboardPage() {
   const store = getStore();
   const company = (await resolveCompany())!;
   const calls = await store.listCalls(company.id);
-  const [actions, reviews, ownerActions] = await Promise.all([
+  const [actions, reviews, ownerActions, reviewRequests] = await Promise.all([
     store.listActions(company.id),
     store.listReviewItems(company.id, "open"),
     listOwnerNotifications(company.id, { status: ["pending", "failed"] }),
+    listReviewRequests(company.id, { status: ["drafted", "eligible", "failed"] }),
   ]);
   const d = computeDashboard(company, calls, actions);
   const roi = computeRoiSnapshot(company, d, calls);
@@ -67,6 +70,12 @@ export default async function DashboardPage() {
       {ownerActions.length > 0 && (
         <div className="mb-6">
           <OwnerActionsCard initial={ownerActions} />
+        </div>
+      )}
+
+      {reviewRequests.length > 0 && (
+        <div className="mb-6">
+          <ReviewRequestsCard initial={reviewRequests} />
         </div>
       )}
 
