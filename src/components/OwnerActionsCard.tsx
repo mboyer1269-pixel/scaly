@@ -3,10 +3,18 @@
 import { useState } from "react";
 import Link from "next/link";
 import { BrainCircuit, Check, PhoneCall, X } from "lucide-react";
-import type { OwnerNotification } from "@/domain/owner-notification";
+import type { OwnerNotification, OwnerNotificationStatus } from "@/domain/owner-notification";
+import type { Tone } from "@/lib/labels";
 import { Badge, Card } from "@/components/ui";
 import { urgencyBadge } from "@/lib/labels";
 import { formatCad } from "@/lib/format";
+
+const STATUS_BADGE: Record<OwnerNotificationStatus, { label: string; tone: Tone }> = {
+  pending: { label: "En attente", tone: "amber" },
+  sent: { label: "Envoyée", tone: "emerald" },
+  failed: { label: "Échec d'envoi", tone: "rose" },
+  dismissed: { label: "Traitée", tone: "slate" },
+};
 
 export function OwnerActionsCard({ initial }: { initial: OwnerNotification[] }) {
   const [items, setItems] = useState(initial);
@@ -30,12 +38,13 @@ export function OwnerActionsCard({ initial }: { initial: OwnerNotification[] }) 
     <Card
       title="Actions à traiter"
       subtitle="Ce que Maude ne pouvait pas régler seule — décisions du propriétaire, les plus urgentes en tête."
-      action={<Badge tone={items.length > 0 ? "amber" : "emerald"}>{items.length} en attente</Badge>}
+      action={<Badge tone={items.length > 0 ? "amber" : "emerald"}>{items.length} à traiter</Badge>}
     >
       {items.length === 0 && <p className="py-3 text-sm text-emerald-700">Aucune décision en attente. 👍</p>}
       <ul className="space-y-2.5">
         {items.map((item) => {
           const u = urgencyBadge(item.urgency);
+          const s = STATUS_BADGE[item.status];
           return (
             <li key={item.id} className="rounded-lg border border-ink-100 px-3 py-3">
               <div className="flex flex-wrap items-start justify-between gap-2">
@@ -43,9 +52,15 @@ export function OwnerActionsCard({ initial }: { initial: OwnerNotification[] }) 
                   <p className="text-sm font-semibold text-ink-900">{item.title}</p>
                   <p className="mt-0.5 text-xs leading-relaxed text-ink-600">{item.summary}</p>
                 </div>
-                <Badge tone={u.tone}>{u.label}</Badge>
+                <span className="flex shrink-0 items-center gap-1.5">
+                  <Badge tone={s.tone}>{s.label}</Badge>
+                  <Badge tone={u.tone}>{u.label}</Badge>
+                </span>
               </div>
               <p className="mt-2 text-xs font-medium text-ink-700">→ {item.recommendedAction}</p>
+              {item.status === "failed" && item.failureReason && (
+                <p className="mt-1 text-xs text-rose-600">Échec de livraison : {item.failureReason}</p>
+              )}
               <div className="mt-3 flex flex-wrap items-center gap-2">
                 {item.sourceCallId && (
                   <Link

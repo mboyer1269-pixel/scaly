@@ -189,11 +189,23 @@ async function transition(
 export function markNotificationSent(
   companyId: string,
   id: string,
-  options: ServiceOptions = {},
+  options: ServiceOptions & { providerMessageId?: string } = {},
 ): Promise<OwnerNotification> {
   const now = options.now ?? new Date();
   const repo = options.repo ?? getOwnerNotificationRepository();
-  return transition(companyId, id, repo, (current, iso) => ({ ...current, status: "sent", sentAt: iso, updatedAt: iso }), now);
+  return transition(
+    companyId,
+    id,
+    repo,
+    (current, iso) => ({
+      ...current,
+      status: "sent",
+      sentAt: iso,
+      updatedAt: iso,
+      ...(options.providerMessageId ? { providerMessageId: options.providerMessageId } : {}),
+    }),
+    now,
+  );
 }
 
 export function markNotificationFailed(
@@ -224,7 +236,7 @@ export function dismissNotification(
 }
 
 export interface ListOwnerNotificationsOptions {
-  status?: OwnerNotificationStatus;
+  status?: OwnerNotificationStatus | OwnerNotificationStatus[];
   repo?: OwnerNotificationRepository;
 }
 
@@ -235,7 +247,8 @@ export async function listOwnerNotifications(
 ): Promise<OwnerNotification[]> {
   const repo = options.repo ?? getOwnerNotificationRepository();
   const all = await repo.list(companyId);
-  const filtered = options.status ? all.filter((item) => item.status === options.status) : all;
+  const wanted = options.status ? new Set(Array.isArray(options.status) ? options.status : [options.status]) : null;
+  const filtered = wanted ? all.filter((item) => wanted.has(item.status)) : all;
   return filtered.sort((a, b) => {
     if (STATUS_RANK[a.status] !== STATUS_RANK[b.status]) return STATUS_RANK[a.status] - STATUS_RANK[b.status];
     if (URGENCY_RANK[a.urgency] !== URGENCY_RANK[b.urgency]) return URGENCY_RANK[a.urgency] - URGENCY_RANK[b.urgency];

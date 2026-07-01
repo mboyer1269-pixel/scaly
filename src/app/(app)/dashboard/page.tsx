@@ -40,7 +40,7 @@ export default async function DashboardPage() {
   const [actions, reviews, ownerActions] = await Promise.all([
     store.listActions(company.id),
     store.listReviewItems(company.id, "open"),
-    listOwnerNotifications(company.id, { status: "pending" }),
+    listOwnerNotifications(company.id, { status: ["pending", "failed"] }),
   ]);
   const d = computeDashboard(company, calls, actions);
   const roi = computeRoiSnapshot(company, d, calls);
