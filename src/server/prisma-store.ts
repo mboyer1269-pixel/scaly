@@ -578,6 +578,9 @@ export class PrismaStore implements ScalyRepository {
       reviewItems,
       readinessEvidence,
       usage,
+      businessKnowledge,
+      ownerNotifications,
+      reviewRequests,
       _auditLog,
       company,
     ] = await prisma.$transaction([
@@ -589,6 +592,10 @@ export class PrismaStore implements ScalyRepository {
       prisma.reviewItem.deleteMany({ where: { companyId } }),
       prisma.readinessEvidence.deleteMany({ where: { companyId } }),
       prisma.usagePeriod.deleteMany({ where: { companyId } }),
+      // Moteurs Phase 4 : FK RESTRICT -> DOIVENT être supprimés avant Company.
+      prisma.businessKnowledgeItem.deleteMany({ where: { companyId } }),
+      prisma.ownerNotification.deleteMany({ where: { companyId } }),
+      prisma.reviewRequest.deleteMany({ where: { companyId } }),
       prisma.auditLog.updateMany({ where: { companyId }, data: { companyId: null } }),
       prisma.company.deleteMany({ where: { id: companyId } }),
     ]);
@@ -605,6 +612,9 @@ export class PrismaStore implements ScalyRepository {
         reviewItems: reviewItems.count,
         readinessEvidence: readinessEvidence.count,
         usagePeriods: usage.count,
+        businessKnowledge: businessKnowledge.count,
+        ownerNotifications: ownerNotifications.count,
+        reviewRequests: reviewRequests.count,
       },
     };
   }

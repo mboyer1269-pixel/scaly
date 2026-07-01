@@ -19,6 +19,15 @@ export interface OwnerNotificationRepository {
   list(companyId: string): Promise<OwnerNotification[]>;
   get(id: string): Promise<OwnerNotification | undefined>;
   save(notification: OwnerNotification): Promise<OwnerNotification>;
+  /**
+   * Réserve ATOMIQUEMENT une notification pending pour livraison (pending -> sent).
+   * Retourne true seulement si CET appel l'a réservée : empêche deux crons
+   * concurrents d'envoyer deux fois le même SMS. Le statut réel (échec) est
+   * corrigé après l'envoi par le service de livraison.
+   */
+  claimForDelivery(companyId: string, id: string, nowIso: string): Promise<boolean>;
+  /** Supprime toutes les notifications du tenant (Loi 25). Retourne le nombre supprimé. */
+  deleteByCompany(companyId: string): Promise<number>;
 }
 
 /**
@@ -47,6 +56,24 @@ export class InMemoryOwnerNotificationRepository implements OwnerNotificationRep
   async save(notification: OwnerNotification): Promise<OwnerNotification> {
     this.items.set(notification.id, notification);
     return notification;
+  }
+
+  async claimForDelivery(companyId: string, id: string, nowIso: string): Promise<boolean> {
+    const current = this.items.get(id);
+    if (!current || current.companyId !== companyId || current.status !== "pending") return false;
+    this.items.set(id, { ...current, status: "sent", sentAt: nowIso, updatedAt: nowIso });
+    return true;
+  }
+
+  async deleteByCompany(companyId: string): Promise<number> {
+    let count = 0;
+    for (const [id, item] of [...this.items]) {
+      if (item.companyId === companyId) {
+        this.items.delete(id);
+        count += 1;
+      }
+    }
+    return count;
   }
 }
 

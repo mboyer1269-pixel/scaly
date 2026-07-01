@@ -38,6 +38,11 @@ export class PrismaBusinessKnowledgeRepository implements BusinessKnowledgeRepos
     await prisma.businessKnowledgeItem.upsert({ where: { id: item.id }, create: data, update: data });
     return item;
   }
+
+  async deleteByCompany(companyId: string): Promise<number> {
+    const { count } = await prisma.businessKnowledgeItem.deleteMany({ where: { companyId } });
+    return count;
+  }
 }
 
 export class PrismaOwnerNotificationRepository implements OwnerNotificationRepository {
@@ -56,6 +61,20 @@ export class PrismaOwnerNotificationRepository implements OwnerNotificationRepos
     await prisma.ownerNotification.upsert({ where: { id: notification.id }, create: data, update: data });
     return notification;
   }
+
+  async claimForDelivery(companyId: string, id: string, nowIso: string): Promise<boolean> {
+    // Réservation atomique : seule la ligne encore `pending` bascule. count===1 => réservée par nous.
+    const { count } = await prisma.ownerNotification.updateMany({
+      where: { id, companyId, status: "pending" },
+      data: { status: "sent", sentAt: new Date(nowIso), updatedAt: new Date(nowIso) },
+    });
+    return count === 1;
+  }
+
+  async deleteByCompany(companyId: string): Promise<number> {
+    const { count } = await prisma.ownerNotification.deleteMany({ where: { companyId } });
+    return count;
+  }
 }
 
 export class PrismaReviewRequestRepository implements ReviewRequestRepository {
@@ -73,5 +92,10 @@ export class PrismaReviewRequestRepository implements ReviewRequestRepository {
     const data = reviewRequestToDb(request);
     await prisma.reviewRequest.upsert({ where: { id: request.id }, create: data, update: data });
     return request;
+  }
+
+  async deleteByCompany(companyId: string): Promise<number> {
+    const { count } = await prisma.reviewRequest.deleteMany({ where: { companyId } });
+    return count;
   }
 }

@@ -14,6 +14,8 @@ export interface BusinessKnowledgeRepository {
   list(companyId: string): Promise<BusinessKnowledgeItem[]>;
   get(id: string): Promise<BusinessKnowledgeItem | undefined>;
   save(item: BusinessKnowledgeItem): Promise<BusinessKnowledgeItem>;
+  /** Supprime toutes les connaissances du tenant (droit à l'effacement — Loi 25). Retourne le nombre supprimé. */
+  deleteByCompany(companyId: string): Promise<number>;
 }
 
 export class InMemoryBusinessKnowledgeRepository implements BusinessKnowledgeRepository {
@@ -32,6 +34,17 @@ export class InMemoryBusinessKnowledgeRepository implements BusinessKnowledgeRep
   async save(item: BusinessKnowledgeItem): Promise<BusinessKnowledgeItem> {
     this.items.set(item.id, item);
     return item;
+  }
+
+  async deleteByCompany(companyId: string): Promise<number> {
+    let count = 0;
+    for (const [id, item] of [...this.items]) {
+      if (item.companyId === companyId) {
+        this.items.delete(id);
+        count += 1;
+      }
+    }
+    return count;
   }
 }
 
