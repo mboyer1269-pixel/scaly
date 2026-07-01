@@ -22,6 +22,7 @@ import {
   relayTextToken,
   withRelayTtsRules,
 } from "./relay-protocol";
+import { createCheckpointer } from "./checkpoint";
 
 const PORT = Number(process.env.REALTIME_RELAY_PORT ?? 8082);
 const APP_URL = process.env.SCALY_APP_URL ?? "http://localhost:3000";
@@ -144,6 +145,9 @@ function handleRelayConnection(relayWs: WebSocket): void {
   let messages: { role: string; content: string }[] = [];
   let inflight: AbortController | null = null;
   let transferPhone = "";
+  // Durabilité : chaque tour stable est flushé vers l'app — un crash du pont
+  // ne perd plus le transcript, seulement les tours pas encore prononcés.
+  const checkpointer = createCheckpointer({ appUrl: APP_URL, secret: SECRET, tag: "relay" });
   const meter = new RelayLatencyMeter();
   const t0 = Date.now();
   const atMs = () => Date.now() - t0;
@@ -184,6 +188,7 @@ function handleRelayConnection(relayWs: WebSocket): void {
           if (greeting) {
             messages.push({ role: "assistant", content: greeting });
             log!.turns.push({ speaker: "agent", text: greeting, atMs: atMs() });
+            checkpointer.onTurn(log!);
           }
           console.log(`[relay] Session ouverte pour ${log!.callSid} (${ctx.company.name}, modèle ${MODEL})`);
         } catch (err) {
@@ -200,6 +205,7 @@ function handleRelayConnection(relayWs: WebSocket): void {
       if (!said || !log) return;
       log.turns.push({ speaker: "caller", text: said, atMs: atMs(), lang: msg.lang?.toLowerCase().startsWith("en") ? "en" : undefined });
       messages.push({ role: "user", content: said });
+      checkpointer.onTurn(log);
       meter.onPromptReceived(atMs());
 
       inflight?.abort();
@@ -228,6 +234,7 @@ function handleRelayConnection(relayWs: WebSocket): void {
           if (turn && turn.text && log) {
             messages.push({ role: "assistant", content: turn.text });
             log.turns.push({ speaker: "agent", text: turn.text, atMs: atMs(), latency: turn.latency ?? undefined });
+            checkpointer.onTurn(log);
           }
         } catch (err) {
           if (controller.signal.aborted) return;

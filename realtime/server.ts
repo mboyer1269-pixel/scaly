@@ -31,6 +31,7 @@ import {
   twilioMediaFrame,
   TurnLatencyMeter,
 } from "./protocol";
+import { createCheckpointer } from "./checkpoint";
 
 const PORT = Number(process.env.REALTIME_PORT ?? 8081);
 const APP_URL = process.env.SCALY_APP_URL ?? "http://localhost:3000";
@@ -106,6 +107,9 @@ function handleTwilioConnection(twilioWs: WebSocket): void {
   let openaiWs: WebSocket | null = null;
   let log: SessionLog | null = null;
   let agentSpeaking = false;
+  // Durabilité : chaque tour stable est flushé vers l'app — un crash du pont
+  // ne perd plus le transcript, seulement les tours pas encore prononcés.
+  const checkpointer = createCheckpointer({ appUrl: APP_URL, secret: SECRET, tag: "realtime" });
   const meter = new TurnLatencyMeter();
   let pendingLatency: VoiceTurnLatency | null = null;
   const t0 = Date.now();
@@ -173,12 +177,16 @@ function handleTwilioConnection(twilioWs: WebSocket): void {
                 meter.onCallerSpeechStopped(atMs());
                 break;
               case "caller_transcript":
-                if (action.text && log) log.turns.push({ speaker: "caller", text: action.text, atMs: atMs() });
+                if (action.text && log) {
+                  log.turns.push({ speaker: "caller", text: action.text, atMs: atMs() });
+                  checkpointer.onTurn(log);
+                }
                 break;
               case "agent_transcript":
                 if (action.text && log) {
                   log.turns.push({ speaker: "agent", text: action.text, atMs: atMs(), latency: pendingLatency ?? undefined });
                   pendingLatency = null;
+                  checkpointer.onTurn(log);
                 }
                 break;
               case "transfer_requested":

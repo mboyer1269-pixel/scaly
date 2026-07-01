@@ -19,6 +19,11 @@ export function callIdFromTwilio(callSid: string): string {
   return safe ? `call_twilio_${safe}` : newId("call_live");
 }
 
+/** Brouillon vivant checkpointé par le pont — pas encore finalisé. */
+export function isCheckpointDraft(call: Call): boolean {
+  return Boolean(call.provenance?.checkpointAt);
+}
+
 function fallbackTranscript(company: Company): TranscriptTurn[] {
   const text =
     company.defaultLanguage === "en"
@@ -31,6 +36,9 @@ function fallbackTranscript(company: Company): TranscriptTurn[] {
  * Persiste l'appel de repli (statut "transferred") + preuve + audit.
  * Idempotent par callSid : un retry Twilio ou un double callback `action`
  * ne crée ni doublon d'appel, ni doublon de preuve/audit.
+ * Si un brouillon checkpointé existe (le pont a flushé des tours avant de
+ * crasher), il est UPGRADÉ : le transcript partiel réel est conservé et
+ * analysé — le propriétaire reçoit un résumé utile, pas une ligne générique.
  */
 export async function persistFallbackCall(opts: {
   company: Company;
@@ -40,25 +48,29 @@ export async function persistFallbackCall(opts: {
   transferReason?: string;
 }): Promise<void> {
   const store = getStore();
+  let draft: Call | undefined;
   if (opts.callSid && opts.callSid !== "inconnu") {
     const existing = await store.findCallByExternalId(opts.company.id, opts.callSid);
-    if (existing) return;
+    if (existing) {
+      if (!isCheckpointDraft(existing)) return;
+      draft = existing;
+    }
   }
   const agent = await store.getAgentByCompany(opts.company.id);
   const script = agent ? getScriptById(agent.qualificationScriptId) : undefined;
   const now = new Date().toISOString();
   const call: Call = {
-    id: callIdFromTwilio(opts.callSid),
+    id: draft?.id ?? callIdFromTwilio(opts.callSid),
     companyId: opts.company.id,
     direction: "inbound",
     status: "transferred",
     source: "live",
-    fromNumber: opts.from || "inconnu",
+    fromNumber: (draft?.fromNumber && draft.fromNumber !== "inconnu" ? draft.fromNumber : opts.from) || "inconnu",
     language: opts.company.defaultLanguage,
-    startedAt: now,
-    durationSec: 1,
+    startedAt: draft?.startedAt ?? now,
+    durationSec: Math.max(draft?.durationSec ?? 1, 1),
     scriptId: script?.id,
-    transcript: fallbackTranscript(opts.company),
+    transcript: draft ? [...draft.transcript, ...fallbackTranscript(opts.company)] : fallbackTranscript(opts.company),
     provenance: {
       provider: "twilio",
       externalId: opts.callSid,
@@ -91,6 +103,6 @@ export async function persistFallbackCall(opts: {
     companyId: opts.company.id,
     actor: "twilio",
     event: "appel_live_repli_persisté",
-    detail: `${call.id} · Twilio ${opts.callSid || "?"} · transfert vers humain`,
+    detail: `${call.id} · Twilio ${opts.callSid || "?"} · transfert vers humain${draft ? ` · ${draft.transcript.length} tour(s) checkpointé(s) préservé(s)` : ""}`,
   });
 }

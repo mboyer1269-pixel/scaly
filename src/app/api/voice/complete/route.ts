@@ -13,6 +13,7 @@ import { consentFromCall } from "@/services/consent";
 import { createPostCallNotificationFromCall } from "@/services/post-call-notification";
 import { createReviewRequestFromCall, evaluateReviewEligibility } from "@/services/review-requests";
 import { isSmsConfigured, sendSms } from "@/adapters/integrations/twilio-sms";
+import { isCheckpointDraft } from "@/server/voice-fallback";
 import { newId } from "@/lib/format";
 import type { Call, TranscriptTurn } from "@/domain/call";
 import type { LanguageCode } from "@/domain/company";
@@ -60,10 +61,16 @@ export async function POST(req: Request) {
 
   // Idempotence : un retry Twilio réutilise le même callSid. Ne recrée ni appel,
   // ni notification, ni demande d'avis, ni audit — retourne l'appel existant.
+  // Exception : un brouillon checkpointé (pont encore en vie au moment du flush)
+  // n'est PAS un final — il est remplacé EN PLACE (même id, addCall upsert).
+  let draftId: string | undefined;
   if (body.callSid) {
     const existing = await store.findCallByExternalId(company.id, body.callSid);
     if (existing) {
-      return NextResponse.json({ callId: existing.id, actionsPlanned: 0, idempotent: true });
+      if (!isCheckpointDraft(existing)) {
+        return NextResponse.json({ callId: existing.id, actionsPlanned: 0, idempotent: true });
+      }
+      draftId = existing.id;
     }
   }
 
@@ -79,7 +86,7 @@ export async function POST(req: Request) {
   const measured = turns.map((t) => t.latency).filter((l): l is VoiceTurnLatency => Boolean(l && !l.simulated));
 
   const call: Call = {
-    id: newId("call"),
+    id: draftId ?? newId("call"),
     companyId: company.id,
     direction: "inbound",
     status: body.transferred ? "transferred" : "completed",
