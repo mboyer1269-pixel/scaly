@@ -9,6 +9,8 @@ import { resolveCompany } from "@/server/tenant";
 import { computeDashboard, computePhonePerformanceScore } from "@/services/analytics";
 import { computeRevenueCounter } from "@/services/revenue";
 import { computeRescueQueue, computeRoiSnapshot } from "@/services/rescue";
+import { listOwnerNotifications } from "@/services/owner-notifications";
+import { OwnerActionsCard } from "@/components/OwnerActionsCard";
 import { Badge, Card, EmptyState, PageHeader, Stat } from "@/components/ui";
 import { callStatusBadge, leadBadge, urgencyBadge } from "@/lib/labels";
 import { INTENT_LABELS, NEXT_ACTION_LABELS } from "@/domain/call";
@@ -35,9 +37,10 @@ export default async function DashboardPage() {
   const store = getStore();
   const company = (await resolveCompany())!;
   const calls = await store.listCalls(company.id);
-  const [actions, reviews] = await Promise.all([
+  const [actions, reviews, ownerActions] = await Promise.all([
     store.listActions(company.id),
     store.listReviewItems(company.id, "open"),
+    listOwnerNotifications(company.id, { status: "pending" }),
   ]);
   const d = computeDashboard(company, calls, actions);
   const roi = computeRoiSnapshot(company, d, calls);
@@ -60,6 +63,12 @@ export default async function DashboardPage() {
           </a>
         </div>
       </PageHeader>
+
+      {ownerActions.length > 0 && (
+        <div className="mb-6">
+          <OwnerActionsCard initial={ownerActions} />
+        </div>
+      )}
 
       {/* === La réponse en 60 secondes : l'argent, puis les appels à sauver === */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-5">

@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
 import { resolveCompanyId } from "@/server/tenant";
 import { answerBusinessQuestion, listBusinessKnowledgeItems } from "@/services/business-brain";
+import { createUnknownAnswerNotification } from "@/services/owner-notifications";
 import { isJsonObject } from "@/lib/request-body";
 
 export const dynamic = "force-dynamic";
@@ -20,5 +21,26 @@ export async function POST(req: Request) {
   const company = await getStore().getCompany(companyId);
   if (!company) return NextResponse.json({ error: "Entreprise introuvable" }, { status: 404 });
   const items = await listBusinessKnowledgeItems(company);
-  return NextResponse.json({ answer: answerBusinessQuestion(question, items) });
+  const answer = answerBusinessQuestion(question, items);
+
+  // Un vrai trou de connaissance devient une action owner. Best-effort : ne
+  // jamais faire échouer la réponse à cause de la notification.
+  if (answer.status === "unknown" && answer.refusedReason === "no_approved_source") {
+    try {
+      const notification = await createUnknownAnswerNotification(companyId, {
+        question,
+        reason: "no_approved_source",
+      });
+      await getStore().recordAudit({
+        companyId,
+        actor: "system",
+        event: "owner_notification_created",
+        detail: notification.type,
+      });
+    } catch {
+      // Notification non bloquante : la réponse au client reste prioritaire.
+    }
+  }
+
+  return NextResponse.json({ answer });
 }
