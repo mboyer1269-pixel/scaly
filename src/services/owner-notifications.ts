@@ -21,7 +21,14 @@ export interface OwnerNotificationRepository {
   save(notification: OwnerNotification): Promise<OwnerNotification>;
 }
 
-/** Port de livraison. Aucune implémentation réseau ici : injecté au besoin. */
+/**
+ * Port de livraison LÉGER, optionnel, au moment de la création (tente d'envoyer
+ * tout de suite). Le chemin CANONIQUE de livraison est `OwnerNotificationDelivery`
+ * + `deliverPending*` (voir owner-notification-delivery.ts), utilisé par le cron :
+ * il expose providerMessageId/errorCode/safeError et l'anti double-envoi. Ce port
+ * reste pour les cas « créer et livrer d'un coup » ; sans lui, la notification
+ * reste `pending` jusqu'au passage du cron.
+ */
 export interface OwnerNotifier {
   deliver(notification: OwnerNotification): Promise<{ ok: boolean; reason?: string }>;
 }
