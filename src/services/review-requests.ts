@@ -78,6 +78,29 @@ export function evaluateReviewEligibility(call: Call): ReviewEligibility {
   return { eligible: false, reason: "not_resolved" };
 }
 
+/**
+ * Valide/normalise un lien d'avis saisi par le propriétaire. Vide accepté
+ * (retourne undefined = pas de lien). Sinon, SEULES les URL https complètes
+ * sont acceptées ; sinon, lève une erreur claire. Toujours trim avant retour.
+ * Ne fabrique jamais d'URL.
+ */
+export function normalizeReviewUrl(value: unknown): string | undefined {
+  if (value === undefined || value === null) return undefined;
+  if (typeof value !== "string") throw new Error("Lien Google Review invalide.");
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  let url: URL;
+  try {
+    url = new URL(trimmed);
+  } catch {
+    throw new Error("Lien Google Review invalide : entrez une URL https complète.");
+  }
+  if (url.protocol !== "https:") {
+    throw new Error("Lien Google Review invalide : seules les adresses https sont acceptées.");
+  }
+  return trimmed;
+}
+
 /** Message sobre, humain, FR-CA. N'utilise que des données réelles (nom, entreprise, lien config). */
 export function buildReviewMessage(company: Company, customerName?: string, reviewUrl?: string): string {
   const greeting = customerName ? `Bonjour ${customerName},` : "Bonjour,";
