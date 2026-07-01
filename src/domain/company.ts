@@ -91,6 +91,8 @@ export interface Company {
   name: string;
   /** Description approuvée du commerce, utilisée comme contexte par Maude. */
   businessDescription?: string;
+  /** Lien d'avis approuvé (Google, etc.). Source UNIQUE des demandes d'avis — jamais inventé. */
+  reviewUrl?: string;
   industry: Industry;
   sectorLabel: string;
   ownerName: string;

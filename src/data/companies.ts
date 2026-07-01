@@ -34,6 +34,7 @@ export const SEED_COMPANIES: Company[] = [
     id: DEFAULT_COMPANY_ID,
     name: "Plomberie Bélair",
     businessDescription: "Plomberie résidentielle et commerciale à Laval, avec couverture d'urgence pour les problèmes actifs.",
+    reviewUrl: "https://g.page/r/plomberie-belair/review",
     industry: "services_domicile",
     sectorLabel: "Plomberie résidentielle et commerciale",
     ownerName: "Martin Bélair",
