@@ -52,8 +52,13 @@ export class InMemoryOwnerNotificationRepository implements OwnerNotificationRep
 
 export function getOwnerNotificationRepository(): OwnerNotificationRepository {
   const g = globalThis as { __scalyOwnerNotifications?: OwnerNotificationRepository };
-  if (!g.__scalyOwnerNotifications) g.__scalyOwnerNotifications = new InMemoryOwnerNotificationRepository();
-  return g.__scalyOwnerNotifications;
+  if (g.__scalyOwnerNotifications) return g.__scalyOwnerNotifications;
+  const repo: OwnerNotificationRepository =
+    process.env.STORE_PROVIDER === "prisma"
+      ? new (require("../server/prisma-phase4-repos").PrismaOwnerNotificationRepository)()
+      : new InMemoryOwnerNotificationRepository();
+  g.__scalyOwnerNotifications = repo;
+  return repo;
 }
 
 interface ServiceOptions {

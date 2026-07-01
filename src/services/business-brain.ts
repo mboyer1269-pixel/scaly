@@ -37,8 +37,13 @@ export class InMemoryBusinessKnowledgeRepository implements BusinessKnowledgeRep
 
 export function getBusinessKnowledgeRepository(): BusinessKnowledgeRepository {
   const g = globalThis as { __scalyBusinessKnowledge?: BusinessKnowledgeRepository };
-  if (!g.__scalyBusinessKnowledge) g.__scalyBusinessKnowledge = new InMemoryBusinessKnowledgeRepository();
-  return g.__scalyBusinessKnowledge;
+  if (g.__scalyBusinessKnowledge) return g.__scalyBusinessKnowledge;
+  const repo: BusinessKnowledgeRepository =
+    process.env.STORE_PROVIDER === "prisma"
+      ? new (require("../server/prisma-phase4-repos").PrismaBusinessKnowledgeRepository)()
+      : new InMemoryBusinessKnowledgeRepository();
+  g.__scalyBusinessKnowledge = repo;
+  return repo;
 }
 
 function cleanText(value: unknown, max = 4000): string {

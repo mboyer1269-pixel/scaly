@@ -20,6 +20,7 @@ model Company {
   id              String   @id
   name            String
   businessDescription String?
+  reviewUrl       String?  // lien d'avis approuvé (source des demandes d'avis)
   industry        String
   sectorLabel     String
   ownerName       String
@@ -52,6 +53,9 @@ model Company {
   consents Consent[]
   reviewItems ReviewItem[]
   readinessEvidence ReadinessEvidence[]
+  businessKnowledge BusinessKnowledgeItem[]
+  ownerNotifications OwnerNotification[]
+  reviewRequests ReviewRequest[]
 }
 
 // Coffre de consentements (ADR-018) — par personne, opposable, révocable.
@@ -221,4 +225,70 @@ model ReadinessEvidence {
 
   @@index([companyId, kind, createdAt])
   @@index([callId])
+}
+
+// Business Brain (PR #24) — connaissances owner. Seuls les items owner_manual
+// sont persistés ; les items company_config sont dérivés à la lecture.
+model BusinessKnowledgeItem {
+  id          String   @id
+  companyId   String
+  title       String
+  content     String
+  sourceLabel String
+  sourceType  String   // company_config | owner_manual | website | onboarding
+  status      String   // draft | approved | archived
+  createdAt   DateTime
+  approvedAt  DateTime?
+  expiresAt   DateTime?
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@index([companyId, status])
+}
+
+// Notification propriétaire (PR #25/#26) — alertes owner-facing durables.
+model OwnerNotification {
+  id                   String   @id
+  companyId            String
+  type                 String   // post_call_summary | unknown_answer | escalation | follow_up_needed
+  status               String   // pending | sent | failed | dismissed
+  title                String
+  summary              String
+  recommendedAction    String
+  urgency              String   // critique | haute | normale | basse
+  sourceCallId         String?
+  sourceTraceId        String?
+  modelCostEstimateCad Float?
+  createdAt            DateTime
+  updatedAt            DateTime
+  sentAt               DateTime?
+  dismissedAt          DateTime?
+  providerMessageId    String?
+  failureReason        String?
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@index([companyId, status])
+}
+
+// Demande d'avis (PR #27) — preuve sociale mesurable, permission-aware.
+model ReviewRequest {
+  id            String   @id
+  companyId     String
+  status        String   // eligible | drafted | sent | skipped | failed
+  customerName  String?
+  customerPhone String?
+  sourceCallId  String?
+  reason        String
+  message       String
+  reviewUrl     String?
+  createdAt     DateTime
+  updatedAt     DateTime
+  sentAt        DateTime?
+  skippedAt     DateTime?
+  failureReason String?
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@index([companyId, status])
 }
