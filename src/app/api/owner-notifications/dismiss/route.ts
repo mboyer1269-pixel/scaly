@@ -1,7 +1,7 @@
 /** POST /api/owner-notifications/dismiss — le propriétaire écarte une action traitée. */
 import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
-import { resolveCompanyId } from "@/server/tenant";
+import { requireTenant } from "@/server/tenant";
 import { dismissNotification } from "@/services/owner-notifications";
 import { isJsonObject } from "@/lib/request-body";
 
@@ -19,7 +19,9 @@ export async function POST(req: Request) {
   if (!id) return NextResponse.json({ error: "Identifiant requis" }, { status: 400 });
 
   try {
-    const companyId = await resolveCompanyId();
+    const tenant = await requireTenant();
+    if ("block" in tenant) return NextResponse.json({ error: "Ressource introuvable." }, { status: 404 });
+    const companyId = tenant.companyId;
     const notification = await dismissNotification(companyId, id);
     await getStore().recordAudit({
       companyId,

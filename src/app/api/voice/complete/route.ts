@@ -58,6 +58,15 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `Contexte incomplet pour ${body.companyId}` }, { status: 404 });
   }
 
+  // Idempotence : un retry Twilio réutilise le même callSid. Ne recrée ni appel,
+  // ni notification, ni demande d'avis, ni audit — retourne l'appel existant.
+  if (body.callSid) {
+    const existing = (await store.listCalls(company.id)).find((c) => c.provenance?.externalId === body.callSid);
+    if (existing) {
+      return NextResponse.json({ callId: existing.id, actionsPlanned: 0, idempotent: true });
+    }
+  }
+
   const turns = body.turns;
   const langOf = (l?: string): LanguageCode => (l === "en" ? "en" : company.defaultLanguage);
   const transcript: TranscriptTurn[] = turns.map((t) => ({
@@ -82,6 +91,7 @@ export async function POST(req: Request) {
     scriptId: script.id,
     transcript,
     recordingUrl: null,
+    provenance: body.callSid ? { provider: "twilio", externalId: body.callSid } : undefined,
   };
   call.intelligence = intelligenceEngine.analyze(call, script, {
     transferred: Boolean(body.transferred),

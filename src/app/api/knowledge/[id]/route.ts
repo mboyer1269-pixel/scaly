@@ -1,7 +1,7 @@
 /** PUT /api/knowledge/:id — approuver ou archiver une connaissance owner. */
 import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
-import { resolveCompanyId } from "@/server/tenant";
+import { requireTenant } from "@/server/tenant";
 import { approveKnowledgeItem, archiveKnowledgeItem } from "@/services/business-brain";
 import { isJsonObject } from "@/lib/request-body";
 
@@ -17,7 +17,9 @@ export async function PUT(req: Request, { params }: { params: Promise<{ id: stri
   if (!isJsonObject(body)) return NextResponse.json({ error: "Un objet JSON est requis" }, { status: 400 });
 
   try {
-    const companyId = await resolveCompanyId();
+    const tenant = await requireTenant();
+    if ("block" in tenant) return NextResponse.json({ error: "Ressource introuvable." }, { status: 404 });
+    const companyId = tenant.companyId;
     const { id } = await params;
     const action = body.action;
     const item =

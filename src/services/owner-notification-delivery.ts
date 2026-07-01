@@ -95,29 +95,28 @@ export async function deliverPendingOwnerNotification(
   delivery: OwnerNotificationDelivery,
   options: DeliverOptions = {},
 ): Promise<OwnerNotification> {
+  const now = options.now ?? new Date();
   const repo = options.repo ?? getOwnerNotificationRepository();
   const current = await repo.get(id);
   if (!current || current.companyId !== companyId) throw new Error("Notification introuvable.");
   if (current.status !== "pending") return current; // déjà traitée : jamais de double-envoi.
 
+  // Réservation ATOMIQUE avant l'envoi (pending -> sent). Si un autre passage
+  // l'a déjà réservée, on n'envoie PAS : pas de double SMS concurrent.
+  const claimed = await repo.claimForDelivery(companyId, id, now.toISOString());
+  if (!claimed) return (await repo.get(id)) ?? current;
+
   let result: OwnerNotificationDeliveryResult;
   try {
     result = await delivery.sendOwnerNotification(current);
   } catch (error) {
-    return markNotificationFailed(companyId, id, toSafeError(error), { now: options.now, repo });
+    return markNotificationFailed(companyId, id, toSafeError(error), { now, repo });
   }
 
   if (result.status === "sent") {
-    return markNotificationSent(companyId, id, {
-      now: options.now,
-      repo,
-      providerMessageId: result.providerMessageId,
-    });
+    return markNotificationSent(companyId, id, { now, repo, providerMessageId: result.providerMessageId });
   }
-  return markNotificationFailed(companyId, id, result.errorCode ?? result.safeError ?? "delivery_failed", {
-    now: options.now,
-    repo,
-  });
+  return markNotificationFailed(companyId, id, result.errorCode ?? result.safeError ?? "delivery_failed", { now, repo });
 }
 
 export interface DeliverBatchSummary {

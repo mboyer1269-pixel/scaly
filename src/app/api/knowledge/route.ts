@@ -1,15 +1,16 @@
 /** GET/POST /api/knowledge — Business Brain approuve par tenant. */
 import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
-import { resolveCompanyId } from "@/server/tenant";
+import { requireTenant } from "@/server/tenant";
 import { createKnowledgeDraft, listBusinessKnowledgeItems } from "@/services/business-brain";
 import { isJsonObject } from "@/lib/request-body";
 
 export const dynamic = "force-dynamic";
 
 export async function GET() {
-  const companyId = await resolveCompanyId();
-  const company = await getStore().getCompany(companyId);
+  const tenant = await requireTenant();
+  if ("block" in tenant) return NextResponse.json({ error: "Ressource introuvable." }, { status: 404 });
+  const company = await getStore().getCompany(tenant.companyId);
   if (!company) return NextResponse.json({ error: "Entreprise introuvable" }, { status: 404 });
   return NextResponse.json({ items: await listBusinessKnowledgeItems(company) });
 }
@@ -24,7 +25,9 @@ export async function POST(req: Request) {
   if (!isJsonObject(body)) return NextResponse.json({ error: "Un objet JSON est requis" }, { status: 400 });
 
   try {
-    const companyId = await resolveCompanyId();
+    const tenant = await requireTenant();
+    if ("block" in tenant) return NextResponse.json({ error: "Ressource introuvable." }, { status: 404 });
+    const companyId = tenant.companyId;
     const item = await createKnowledgeDraft(companyId, {
       title: typeof body.title === "string" ? body.title : "",
       content: typeof body.content === "string" ? body.content : "",

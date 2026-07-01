@@ -17,6 +17,9 @@ import type { VoiceAgentConfig } from "@/domain/agent";
 import type { VoiceSessionRecord } from "@/domain/voice";
 import type { ReadinessEvidence, ReadinessKind } from "@/domain/readiness";
 import type { ReviewItem, ReviewStatus } from "@/domain/review";
+import { getBusinessKnowledgeRepository } from "@/services/business-brain";
+import { getOwnerNotificationRepository } from "@/services/owner-notifications";
+import { getReviewRequestRepository } from "@/services/review-requests";
 import { buildSeedData } from "./seed";
 
 /** Journal d'audit de conformité (qui a changé quoi, quand). */
@@ -57,6 +60,9 @@ export interface CompanyDeletionResult {
     reviewItems: number;
     readinessEvidence: number;
     usagePeriods: number;
+    businessKnowledge: number;
+    ownerNotifications: number;
+    reviewRequests: number;
   };
 }
 
@@ -326,6 +332,9 @@ export class InMemoryStore implements ScalyRepository {
       reviewItems: 0,
       readinessEvidence: 0,
       usagePeriods: 0,
+      businessKnowledge: 0,
+      ownerNotifications: 0,
+      reviewRequests: 0,
     };
 
     for (const [id, call] of [...this.calls]) {
@@ -364,6 +373,11 @@ export class InMemoryStore implements ScalyRepository {
         deleted.readinessEvidence += 1;
       }
     }
+
+    // Moteurs Phase 4 (repos autonomes) — effacement complet (Loi 25).
+    deleted.businessKnowledge = await getBusinessKnowledgeRepository().deleteByCompany(companyId);
+    deleted.ownerNotifications = await getOwnerNotificationRepository().deleteByCompany(companyId);
+    deleted.reviewRequests = await getReviewRequestRepository().deleteByCompany(companyId);
 
     this.audit = this.audit.map((entry) => entry.companyId === companyId ? { ...entry, companyId: undefined } : entry);
     return { companyId, deleted };

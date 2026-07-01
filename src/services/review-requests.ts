@@ -20,6 +20,8 @@ export interface ReviewRequestRepository {
   list(companyId: string): Promise<ReviewRequest[]>;
   get(id: string): Promise<ReviewRequest | undefined>;
   save(request: ReviewRequest): Promise<ReviewRequest>;
+  /** Supprime toutes les demandes d'avis du tenant (Loi 25). Retourne le nombre supprimé. */
+  deleteByCompany(companyId: string): Promise<number>;
 }
 
 export class InMemoryReviewRequestRepository implements ReviewRequestRepository {
@@ -36,6 +38,17 @@ export class InMemoryReviewRequestRepository implements ReviewRequestRepository 
   async save(request: ReviewRequest): Promise<ReviewRequest> {
     this.items.set(request.id, request);
     return request;
+  }
+
+  async deleteByCompany(companyId: string): Promise<number> {
+    let count = 0;
+    for (const [id, item] of [...this.items]) {
+      if (item.companyId === companyId) {
+        this.items.delete(id);
+        count += 1;
+      }
+    }
+    return count;
   }
 }
 
