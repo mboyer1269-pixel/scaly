@@ -19,6 +19,7 @@ export function SettingsForm({ company, persistent }: { company: Company; persis
   const [form, setForm] = useState({
     name: company.name,
     businessDescription: company.businessDescription ?? "",
+    reviewUrl: company.reviewUrl ?? "",
     sectorLabel: company.sectorLabel,
     city: company.city,
     mainPhone: company.mainPhone,
@@ -60,6 +61,7 @@ export function SettingsForm({ company, persistent }: { company: Company; persis
         body: JSON.stringify({
           name: form.name,
           businessDescription: form.businessDescription,
+          reviewUrl: form.reviewUrl,
           sectorLabel: form.sectorLabel,
           city: form.city,
           mainPhone: form.mainPhone,
@@ -204,6 +206,20 @@ export function SettingsForm({ company, persistent }: { company: Company; persis
           <div>
             <label className={label} htmlFor="settings-essential-questions">Questions essentielles à poser (une par ligne)</label>
             <textarea id="settings-essential-questions" name="essentialQuestions" rows={4} className={input} value={form.essentialQuestions} onChange={(e) => set("essentialQuestions", e.target.value)} />
+          </div>
+          <div>
+            <label className={label} htmlFor="settings-review-url">Lien Google Review (optionnel)</label>
+            <input
+              id="settings-review-url"
+              name="reviewUrl"
+              type="url"
+              inputMode="url"
+              placeholder="https://g.page/r/votre-commerce/review"
+              className={input}
+              value={form.reviewUrl}
+              onChange={(e) => set("reviewUrl", e.target.value)}
+            />
+            <p className="mt-1 text-[11px] text-ink-600">Lien Google Review utilisé seulement après une interaction positive ou résolue. URL https uniquement ; laissez vide pour ne pas demander d'avis.</p>
           </div>
         </div>
       </Card>
