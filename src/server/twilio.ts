@@ -6,6 +6,12 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 import type { LanguageCode } from "@/domain/company";
 
+export interface RelaySessionIdentity {
+  companyId: string;
+  callSid: string;
+  from: string;
+}
+
 export function xmlEscape(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -28,12 +34,53 @@ export function validateTwilioSignature(authToken: string, url: string, params: 
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+export function relaySessionToken(secret: string, identity: RelaySessionIdentity): string {
+  const data = `${identity.companyId}|${identity.callSid}|${identity.from}`;
+  return createHmac("sha256", secret).update(Buffer.from(data, "utf-8")).digest("base64url");
+}
+
+export function verifyRelaySessionToken(secret: string, identity: RelaySessionIdentity, token: string): boolean {
+  const expected = relaySessionToken(secret, identity);
+  const a = Buffer.from(expected);
+  const b = Buffer.from(token);
+  return a.length === b.length && timingSafeEqual(a, b);
+}
+
 /** TwiML : ouvre le Media Stream bidirectionnel vers scaly-realtime. */
 export function twimlConnectStream(wsUrl: string, parameters: Record<string, string> = {}): string {
   const params = Object.entries(parameters)
     .map(([name, value]) => `<Parameter name="${xmlEscape(name)}" value="${xmlEscape(value)}" />`)
     .join("");
   return `<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="${xmlEscape(wsUrl)}">${params}</Stream></Connect></Response>`;
+}
+
+/** Options voix du prototype ConversationRelay — Twilio porte l'ASR et la TTS. */
+export interface RelayTwimlOptions {
+  /** Accueil parlé par Twilio dès le décroché. */
+  welcomeGreeting: string;
+  /** fr-CA par défaut : langue ASR + TTS de la session. */
+  language: string;
+  /** "Amazon" (Polly), "Google", "ElevenLabs", selon le compte Twilio. */
+  ttsProvider: string;
+  /** Exemple : "Gabrielle-Neural" pour tester une voix fr-CA native. */
+  voice: string;
+  /** "Google" ou "Deepgram", selon le compte Twilio. */
+  transcriptionProvider: string;
+  /** Modèle ASR optionnel. */
+  speechModel?: string;
+}
+
+/** TwiML : ouvre une session ConversationRelay vers le prototype A/B. */
+export function twimlConnectRelay(wsUrl: string, opts: RelayTwimlOptions, parameters: Record<string, string> = {}): string {
+  const attrs =
+    `url="${xmlEscape(wsUrl)}" welcomeGreeting="${xmlEscape(opts.welcomeGreeting)}" ` +
+    `language="${xmlEscape(opts.language)}" ttsProvider="${xmlEscape(opts.ttsProvider)}" voice="${xmlEscape(opts.voice)}" ` +
+    `transcriptionProvider="${xmlEscape(opts.transcriptionProvider)}"` +
+    (opts.speechModel ? ` speechModel="${xmlEscape(opts.speechModel)}"` : "");
+  const params = Object.entries(parameters)
+    .map(([name, value]) => `<Parameter name="${xmlEscape(name)}" value="${xmlEscape(value)}" />`)
+    .join("");
+  return `<?xml version="1.0" encoding="UTF-8"?><Response><Connect><ConversationRelay ${attrs}>${params}</ConversationRelay></Connect></Response>`;
 }
 
 /**

@@ -87,6 +87,23 @@ describe("computeRescueQueue", () => {
     expect(q[0].suggested).toContain("SMS parti");
   });
 
+  it("ne considère pas un SMS annulé, échoué ou non configuré comme déjà planifié", () => {
+    const c = call({ id: "sans_sms_actif", minutesAgo: 5 });
+    const actions = ["cancelled", "failed", "requires_config"].map(
+      (status, index) =>
+        ({
+          id: `act_${index}`,
+          companyId: company.id,
+          callId: c.id,
+          type: "send_sms",
+          status,
+        }) as ScalyAction,
+    );
+    const q = computeRescueQueue(company, [c], actions, NOW);
+    expect(q[0].smsPlanned).toBe(false);
+    expect(q[0].suggested).toContain("Rappeler maintenant");
+  });
+
   it("une urgence détectée passe le message en rappel immédiat", () => {
     const c = call({ id: "urgent", minutesAgo: 90 });
     c.intelligence = intel({ urgency: "critique", estimatedValueCad: 800 });
@@ -101,7 +118,11 @@ describe("computeRoiSnapshot", () => {
       // 2 appels sauvés de 600 $ chacun
       ...[1, 2].map((n) => {
         const c = call({ id: `s${n}`, minutesAgo: 60 * n, status: "completed" });
-        c.intelligence = intel({ saved: { reason: "hors_heures" }, estimatedValueCad: 600 });
+        c.intelligence = intel({
+          saved: { reason: "hors_heures" },
+          estimatedValueCad: n === 1 ? 700 : 500,
+          valueBasis: n === 1 ? "montant_mentionne" : "bareme_industrie",
+        });
         return c;
       }),
       // 1 manqué non récupéré
@@ -112,6 +133,8 @@ describe("computeRoiSnapshot", () => {
     const d = computeDashboard(company, calls, [], 14, NOW);
     const roi = computeRoiSnapshot(company, d, calls, NOW);
     expect(roi.protectedCad).toBe(1200);
+    expect(roi.protectedDeclaredCad).toBe(700);
+    expect(roi.protectedEstimatedCad).toBe(500);
     expect(roi.wouldBeLostCount).toBe(2);
     expect(roi.atRiskCount).toBe(1);
     expect(roi.enCallsCount).toBe(1);

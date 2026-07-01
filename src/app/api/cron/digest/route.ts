@@ -11,7 +11,7 @@ import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
 import { buildDailyDigest } from "@/services/digest";
 import { alertAlreadySent, buildOverageAlert, overageAuditDetail, OVERAGE_AUDIT_EVENT } from "@/services/overage";
-import { planQuoteFollowUps } from "@/services/follow-up";
+import { planQuoteFollowUps, quoteFollowUpsToExecute, revokedQuoteFollowUps } from "@/services/follow-up";
 import { executeActionLive } from "@/services/action-engine";
 import { isSmsConfigured, sendSms } from "@/adapters/integrations/twilio-sms";
 
@@ -36,7 +36,19 @@ async function handle(req: Request) {
     const revoked = new Set(
       (await store.listConsents(company.id)).filter((x) => x.status === "revoque").map((x) => x.phone),
     );
-    const followUps = planQuoteFollowUps(company, calls, actions, new Date(), revoked);
+    for (const action of revokedQuoteFollowUps(actions, revoked)) {
+      action.status = "cancelled";
+      action.audit.push({
+        at: new Date().toISOString(),
+        event: "annulée",
+        detail: "Consentement révoqué avant l'envoi du suivi de soumission.",
+      });
+      await store.saveAction(action);
+    }
+    const followUps = [
+      ...quoteFollowUpsToExecute(actions, revoked),
+      ...planQuoteFollowUps(company, calls, actions, new Date(), revoked),
+    ];
     for (const fu of followUps) {
       const executed = await executeActionLive(fu);
       await store.saveAction(executed);

@@ -9,7 +9,7 @@
  * local), la vérification est sautée et tracée dans l'audit.
  */
 import { getStore } from "@/server/store";
-import { twimlConnectStream, twimlFallbackTransfer, validateTwilioSignature } from "@/server/twilio";
+import { relaySessionToken, twimlConnectRelay, twimlConnectStream, twimlFallbackTransfer, validateTwilioSignature } from "@/server/twilio";
 import { resolveTwilioTenant } from "@/server/twilio-tenant";
 import { getScriptById } from "@/data/industry-scripts";
 import { intelligenceEngine } from "@/services/intelligence";
@@ -141,6 +141,45 @@ export async function POST(req: Request) {
     event: "appel_entrant_reçu",
     detail: `${callSid} de ${from} vers ${resolved.calledNumber}${authToken ? "" : " · signature NON vérifiée (TWILIO_AUTH_TOKEN absent)"}`,
   });
+
+  const relayWsUrl = process.env.SCALY_RELAY_WS_URL;
+  if (process.env.SCALY_VOICE_ENGINE === "relay" && relayWsUrl) {
+    const agent = await store.getAgentByCompany(resolved.company.id);
+    const script = agent ? getScriptById(agent.qualificationScriptId) : undefined;
+    if (agent && script) {
+      const greeting = (agent.greetingScript || script.greeting)
+        .replace(/\{company\}/g, resolved.company.name)
+        .replace(/\{agent\}/g, agent.displayName);
+      await store.recordAudit({
+        companyId: resolved.company.id,
+        actor: "twilio",
+        event: "prototype_relay_servi",
+        detail: `${callSid} -> ConversationRelay (${process.env.SCALY_RELAY_TTS_PROVIDER ?? "Amazon"}/${process.env.SCALY_RELAY_VOICE ?? "Gabrielle-Neural"})`,
+      });
+      const relayParameters: Record<string, string> = { companyId: resolved.company.id, callSid, from, greeting };
+      if (process.env.REALTIME_SHARED_SECRET) {
+        relayParameters.relayToken = relaySessionToken(process.env.REALTIME_SHARED_SECRET, {
+          companyId: resolved.company.id,
+          callSid,
+          from,
+        });
+      }
+      return xml(
+        twimlConnectRelay(
+          relayWsUrl,
+          {
+            welcomeGreeting: greeting,
+            language: process.env.SCALY_RELAY_LANGUAGE ?? "fr-CA",
+            ttsProvider: process.env.SCALY_RELAY_TTS_PROVIDER ?? "Amazon",
+            voice: process.env.SCALY_RELAY_VOICE ?? "Gabrielle-Neural",
+            transcriptionProvider: process.env.SCALY_RELAY_STT_PROVIDER ?? "Google",
+            speechModel: process.env.SCALY_RELAY_SPEECH_MODEL,
+          },
+          relayParameters,
+        ),
+      );
+    }
+  }
 
   const wsUrl = process.env.SCALY_REALTIME_WS_URL;
   if (!wsUrl) {

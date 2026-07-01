@@ -53,6 +53,41 @@
 - `adapters/voice/types.ts` : interfaces `TelephonyProvider`, `SpeechToTextProvider`, `TextToSpeechProvider`, `RealtimeDialogueProvider`, `NotConfiguredError`.
 - ElevenLabs / Whisper = stubs typés (plan B pipeline STT→LLM→TTS si la latence FR-QC d'OpenAI Realtime déçoit).
 
+## Prototype A/B — ConversationRelay
+
+ConversationRelay est un prototype contrôlé, pas le chemin champion. Il est activé uniquement avec `SCALY_VOICE_ENGINE=relay` et `SCALY_RELAY_WS_URL`; sinon `/api/voice/incoming` continue d'utiliser le chemin Media Streams ou le repli humain `<Dial>`.
+
+Différence avec le champion : Twilio porte l'ASR et la TTS, et `realtime/relay-server.ts` ne voit que du texte. L'objectif est de tester à l'oreille si une voix fr-CA native gérée côté Twilio bat le rendu OpenAI Realtime sans trop augmenter la latence.
+
+Garde-fous à conserver :
+
+- le webhook voix continue de résoudre le tenant par numéro appelé (`To`/`Called`);
+- les numéros absents, non mappés ou ambigus restent refusés;
+- le repli humain reste intact quand aucun transport realtime n'est configuré;
+- `REALTIME_SHARED_SECRET` signe la session relay (`companyId` + `callSid` + `from`) et le serveur relay refuse les sessions production sans secret;
+- le relay persiste via `/api/voice/complete`, comme le champion;
+- les mesures `RelayLatencyMeter` couvrent seulement transcript reçu -> premier jeton texte. Elles ne mesurent pas l'ASR final ni la synthèse Twilio.
+
+Runbook rapide :
+
+```bash
+npm run relay
+```
+
+Configurer ensuite :
+
+```bash
+SCALY_VOICE_ENGINE=relay
+SCALY_RELAY_WS_URL=wss://<host-relay>/relay
+SCALY_RELAY_LANGUAGE=fr-CA
+SCALY_RELAY_TTS_PROVIDER=Amazon
+SCALY_RELAY_VOICE=Gabrielle-Neural
+SCALY_RELAY_STT_PROVIDER=Google
+REALTIME_SHARED_SECRET=<meme-secret-app-et-relay>
+```
+
+Retour au champion : retirer `SCALY_VOICE_ENGINE` et redémarrer l'app.
+
 ## Topologie cible
 1. Numéro Twilio par client (ou SIP refer du numéro existant en renvoi d'appel — option zéro-portabilité pour signer vite).
 2. Appel entrant → webhook Twilio → `scaly-realtime` ouvre le Media Stream (WebSocket bidirectionnel, audio µ-law 8 kHz).

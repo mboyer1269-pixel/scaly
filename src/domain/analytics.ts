@@ -67,6 +67,10 @@ export interface RoiSnapshot {
   planPriceCad: number;
   /** Valeur des appels qui auraient été perdus sans Scaly (sauvés). */
   protectedCad: number;
+  /** Portion de protectedCad issue d'un montant explicitement mentionné en appel. */
+  protectedDeclaredCad: number;
+  /** Portion de protectedCad issue du barème d'industrie ou d'une estimation interne. */
+  protectedEstimatedCad: number;
   wouldBeLostCount: number;
   /** Valeur encore à risque (manqués non récupérés). */
   atRiskCad: number;

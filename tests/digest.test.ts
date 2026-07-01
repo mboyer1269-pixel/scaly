@@ -1,9 +1,9 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { Call, CallIntelligence } from "@/domain/call";
 import type { ScalyAction } from "@/domain/action";
 import { SEED_COMPANIES } from "@/data/companies";
 import { answerOwnerKeyword, buildDailyDigest, parseOwnerKeyword } from "@/services/digest";
-import { hasCallbackConsent, planQuoteFollowUps, FOLLOW_UP_AFTER_DAYS } from "@/services/follow-up";
+import { hasCallbackConsent, planQuoteFollowUps, quoteFollowUpsToExecute, revokedQuoteFollowUps, FOLLOW_UP_AFTER_DAYS } from "@/services/follow-up";
 import { isWithinContactHours } from "@/lib/contact-hours";
 import { executeActionLive } from "@/services/action-engine";
 
@@ -141,6 +141,7 @@ describe("executeActionLive sans Twilio configuré", () => {
       if (saved[v] === undefined) delete process.env[v];
       else process.env[v] = saved[v];
     }
+    vi.useRealTimers();
   });
 
   it("retombe sur le mock honnête (jamais de faux « SMS réel »)", async () => {
@@ -157,5 +158,47 @@ describe("executeActionLive sans Twilio configuré", () => {
     expect(result.status).toBe("succeeded");
     expect(result.audit.some((e) => e.event === "exécutée (mock)")).toBe(true);
     expect(result.audit.some((e) => e.event.includes("RÉELLE"))).toBe(false);
+  });
+
+  it("reprend au prochain cron un suivi J+2 reporté hors heures", async () => {
+    for (const v of VARS) {
+      saved[v] = process.env[v];
+    }
+    process.env.TWILIO_ACCOUNT_SID = "AC_test";
+    process.env.TWILIO_AUTH_TOKEN = "twilio_secret";
+    process.env.TWILIO_PHONE_NUMBER = "+15145550000";
+
+    const [planned] = planQuoteFollowUps(company, [
+      call({
+        id: "deferred",
+        hoursAgo: (FOLLOW_UP_AFTER_DAYS + 1) * 24,
+        intelligence: intel({ collectedFields: { consentement_rappel: "oui" } }),
+      }),
+    ], [], NOW);
+
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-06-11T08:30:00-04:00"));
+    const deferred = await executeActionLive(planned);
+
+    expect(deferred.status).toBe("pending");
+    expect(deferred.audit.some((entry) => entry.event === "reportée")).toBe(true);
+
+    vi.setSystemTime(new Date("2026-06-11T14:00:00-04:00"));
+    expect(quoteFollowUpsToExecute([deferred])).toEqual([deferred]);
+  });
+
+  it("ne reprend pas un suivi J+2 si le consentement a été révoqué depuis", () => {
+    const [planned] = planQuoteFollowUps(company, [
+      call({
+        id: "revoked",
+        hoursAgo: (FOLLOW_UP_AFTER_DAYS + 1) * 24,
+        fromNumber: "+1 (514) 555-9999",
+        intelligence: intel({ collectedFields: { consentement_rappel: "oui" } }),
+      }),
+    ], [], NOW);
+    const revoked = new Set(["5145559999"]);
+
+    expect(quoteFollowUpsToExecute([planned], revoked)).toHaveLength(0);
+    expect(revokedQuoteFollowUps([planned], revoked)).toEqual([planned]);
   });
 });
