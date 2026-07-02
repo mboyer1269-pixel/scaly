@@ -9,6 +9,7 @@ export type LanguageCode = "fr" | "en";
 export type Industry =
   | "construction_renovation"
   | "garage_auto"
+  | "concessionnaire_auto"
   | "clinique_privee"
   | "dentiste"
   | "salon_beaute"
@@ -26,6 +27,7 @@ export type Industry =
 export const INDUSTRY_LABELS: Record<Industry, string> = {
   construction_renovation: "Construction / Rénovation",
   garage_auto: "Garage automobile",
+  concessionnaire_auto: "Concessionnaire automobile",
   clinique_privee: "Clinique privée",
   dentiste: "Clinique dentaire",
   salon_beaute: "Salon de beauté",

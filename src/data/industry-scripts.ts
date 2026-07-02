@@ -103,6 +103,58 @@ export const INDUSTRY_SCRIPTS: IndustryScript[] = [
   }),
 
   defineScript({
+    id: "script_concessionnaire",
+    industry: "concessionnaire_auto",
+    name: "Concessionnaire — Ventes, service, pièces et financement",
+    primaryIntent: "prise_rdv",
+    greeting: "{company}, bonjour ! Ici {agent}, l'assistante virtuelle. Vous appelez pour les ventes, le service ou les pièces ?",
+    greetingEn: "{company}, hello! This is {agent}, the virtual assistant. Are you calling for sales, service or parts?",
+    questions: [
+      ...BASE_QUESTIONS,
+      Q("description", "C'est pour les ventes, le service, les pièces ou le financement — et quel est votre besoin ?", "Is this for sales, service, parts or financing — and what do you need?"),
+      Q("vehicule", "Quel véhicule est concerné, ou quel modèle cherchez-vous ?", "Which vehicle is this about, or which model are you looking for?"),
+      Q("moment", "Quand aimeriez-vous passer ou être rappelé ?", "When would you like to come in or be called back?"),
+    ],
+    urgencyCriteria: [
+      { keywords: ["en panne", "remorquage", "accident", "freins", "ne démarre plus"], level: "critique", note: "Véhicule immobilisé ou sécurité" },
+      { keywords: ["rappel de sécurité", "acheté la semaine", "sous garantie", "toujours pas de nouvelles", "personne me rappelle"], level: "haute", note: "Rappel constructeur ou client récent frustré — à traiter vite" },
+      { keywords: ["essai routier", "faire une offre", "prêt à acheter"], level: "haute", note: "Intention d'achat chaude — speed to lead" },
+    ],
+    transferCriteria: [
+      ...COMMON_TRANSFERS,
+      { condition: "Intention d'achat chaude (essai routier, offre, échange) → vendeur ou directeur des ventes", keywords: ["essai routier", "offre", "échange", "acheter"] },
+      { condition: "Financement ou crédit → directeur financier (l'IA ne donne JAMAIS de taux ni de conditions)", keywords: ["financement", "taux", "crédit", "mensualités"] },
+      { condition: "Statut de réparation ou rendez-vous atelier → conseiller au service", keywords: ["ma voiture", "réparation", "au service", "prête"] },
+    ],
+    commonObjections: [
+      { objection: "Le véhicule sur votre site est-il encore disponible ?", response: "Selon les informations disponibles, je ne peux pas garantir la disponibilité en temps réel — je prends vos coordonnées et un membre de l'équipe vous confirme ça rapidement, avant que le véhicule vous file entre les doigts." },
+      { objection: "C'est quoi votre meilleur prix ?", response: "Le prix final se discute avec le vendeur — je note le véhicule qui vous intéresse et on vous rappelle en priorité avec les détails." },
+      { objection: "Où en est ma voiture ?", response: "Je note votre nom et votre véhicule, et votre conseiller au service vous rappelle avec le statut exact — vous n'aurez pas à rappeler." },
+    ],
+    finalAction: "rappeler_immediatement",
+    expectedSummary: "{nom} — {description} ({vehicule}). Moment : {moment}. Département identifié, rappel prioritaire.",
+    crmTags: ["concessionnaire", "lead-auto"],
+    forbiddenPhrases: [
+      "Garantir la disponibilité d'un véhicule en inventaire",
+      "Annoncer un taux de financement ou des conditions de crédit",
+      "Négocier ou promettre un prix de vente",
+    ],
+    valueBaselineCad: 950,
+    sampleNeeds: [
+      "savoir si le VUS usagé annoncé sur votre site est encore disponible",
+      "un rendez-vous pour un changement d'huile et la pose des pneus",
+      "des nouvelles de ma voiture laissée au service",
+      "une évaluation de ma voiture pour un échange",
+      "les heures du département des pièces",
+    ],
+    urgentNeeds: [
+      "ma voiture achetée la semaine passée qui est en panne",
+      "un remorquage vers votre atelier",
+      "une lettre de rappel de sécurité reçue par la poste",
+    ],
+  }),
+
+  defineScript({
     id: "script_clinique",
     industry: "clinique_privee",
     name: "Clinique privée — Prise de rendez-vous et triage non médical",

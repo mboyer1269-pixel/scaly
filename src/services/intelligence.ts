@@ -35,6 +35,10 @@ export interface IntelligenceEngine {
 
 const SPAM_KEYWORDS = ["référencement", "offre exclusive", "promotion", "sondage", "télémarketing", "forfait téléphonique", "responsable des télécommunications"];
 const COMPLAINT_KEYWORDS = ["pas content", "plainte", "personne ne me rappelle", "déçu", "inacceptable", "mauvais service", "vraiment pas content"];
+/** Suivi d'un dossier/travail en cours (« où en est ma voiture ? ») — générique, pas propre à un métier. */
+const STATUS_KEYWORDS = ["où en est", "des nouvelles de", "statut de ma", "statut de mon", "mon dossier", "est-elle prête", "est-il prêt", "toujours pas de nouvelles"];
+/** Question d'information pure (heures, adresse) — sans demande de service. */
+const INFO_KEYWORDS = ["vos heures", "les heures", "heures d'ouverture", "êtes-vous ouverts", "êtes-vous ouvert", "quelle est votre adresse"];
 const POSITIVE_KEYWORDS = ["merci beaucoup", "parfait", "super", "excellent", "great, thank"];
 
 const URGENCY_RANK: Record<Urgency, number> = { critique: 3, haute: 2, normale: 1, basse: 0 };
@@ -101,7 +105,11 @@ class RulesV1Engine implements IntelligenceEngine {
         ? "plainte"
         : urgency === "critique"
           ? "urgence"
-          : script.primaryIntent;
+          : STATUS_KEYWORDS.some((k) => text.includes(k))
+            ? "suivi_dossier"
+            : INFO_KEYWORDS.some((k) => text.includes(k))
+              ? "question_info"
+              : script.primaryIntent;
 
     const sentiment: Sentiment = isComplaint
       ? "negatif"
