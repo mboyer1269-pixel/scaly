@@ -56,7 +56,7 @@ les non-retenus prévenus honnêtement → notification « 🎉 Plage comblée �
 
 ## Validation
 
-- `npm run security:check` : ✅ 351 fichiers, aucun secret
+- `npm run security:check` : ✅ 352 fichiers, aucun secret
 - `npm run typecheck` : ✅
 - `npm test` : ✅ 507/507 (59 fichiers)
 - `npm run build` : ✅
