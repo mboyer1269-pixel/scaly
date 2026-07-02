@@ -21,6 +21,7 @@ import { getBusinessKnowledgeRepository } from "@/services/business-brain";
 import { getOwnerNotificationRepository } from "@/services/owner-notifications";
 import { getReviewRequestRepository } from "@/services/review-requests";
 import { getGapRecoveryRepository } from "@/services/gap-recovery";
+import { getEventOutboxRepository } from "@/services/event-outbox";
 import { buildSeedData } from "./seed";
 
 /** Journal d'audit de conformité (qui a changé quoi, quand). */
@@ -66,6 +67,8 @@ export interface CompanyDeletionResult {
     reviewRequests: number;
     /** WaitlistEntry + AppointmentGap + RecoveryOffer (remplissage des annulations). */
     gapRecovery: number;
+    /** RuntimeEvent — outbox de la frontière (ADR-020). */
+    runtimeEvents: number;
   };
 }
 
@@ -361,6 +364,7 @@ export class InMemoryStore implements ScalyRepository {
       ownerNotifications: 0,
       reviewRequests: 0,
       gapRecovery: 0,
+      runtimeEvents: 0,
     };
 
     for (const [id, call] of [...this.calls]) {
@@ -405,6 +409,7 @@ export class InMemoryStore implements ScalyRepository {
     deleted.ownerNotifications = await getOwnerNotificationRepository().deleteByCompany(companyId);
     deleted.reviewRequests = await getReviewRequestRepository().deleteByCompany(companyId);
     deleted.gapRecovery = await getGapRecoveryRepository().deleteByCompany(companyId);
+    deleted.runtimeEvents = await getEventOutboxRepository().deleteByCompany(companyId);
 
     this.audit = this.audit.map((entry) => entry.companyId === companyId ? { ...entry, companyId: undefined } : entry);
     return { companyId, deleted };

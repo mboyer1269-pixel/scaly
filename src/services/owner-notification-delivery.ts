@@ -21,6 +21,7 @@ import {
   markNotificationSent,
   type OwnerNotificationRepository,
 } from "./owner-notifications";
+import { tryAppendRuntimeEvent, type EventOutboxRepository } from "./event-outbox";
 
 export interface OwnerNotificationDeliveryResult {
   status: "sent" | "failed";
@@ -82,6 +83,8 @@ export function toSafeError(error: unknown): string {
 export interface DeliverOptions {
   now?: Date;
   repo?: OwnerNotificationRepository;
+  /** Outbox de la frontière (ADR-020) — injectable en test comme le repo. */
+  events?: EventOutboxRepository;
 }
 
 /** Une réservation de livraison plus vieille que ceci est réputée périmée (process mort) et reprise. */
@@ -120,7 +123,26 @@ export async function deliverPendingOwnerNotification(
   }
 
   if (result.status === "sent") {
-    return markNotificationSent(companyId, id, { now, repo, providerMessageId: result.providerMessageId });
+    const sent = await markNotificationSent(companyId, id, { now, repo, providerMessageId: result.providerMessageId });
+    // Frontière (ADR-020) — naturellement dédupliqué par claimForDelivery +
+    // le check pending plus haut : une notification n'est envoyée qu'une fois.
+    await tryAppendRuntimeEvent(
+      {
+        companyId,
+        type: "owner.notification_sent",
+        correlationId: current.sourceCallId ?? current.id,
+        externalId: result.providerMessageId,
+        dedupeKey: `owner.notification_sent:${current.id}`,
+        payload: {
+          notificationId: current.id,
+          notificationType: current.type,
+          urgency: current.urgency,
+          sourceCallId: current.sourceCallId ?? null,
+        },
+      },
+      { now, repo: options.events },
+    );
+    return sent;
   }
   return markNotificationFailed(companyId, id, result.errorCode ?? result.safeError ?? "delivery_failed", { now, repo });
 }
@@ -144,7 +166,7 @@ export async function deliverPendingOwnerNotifications(
   let delivered = 0;
   let failed = 0;
   for (const item of pending) {
-    const out = await deliverPendingOwnerNotification(companyId, item.id, delivery, { now: options.now, repo });
+    const out = await deliverPendingOwnerNotification(companyId, item.id, delivery, { now: options.now, repo, events: options.events });
     results.push(out);
     if (out.status === "sent") delivered += 1;
     else if (out.status === "failed") failed += 1;

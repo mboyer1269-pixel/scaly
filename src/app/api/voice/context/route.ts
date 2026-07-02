@@ -8,8 +8,7 @@ import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
 import { getScriptById } from "@/data/industry-scripts";
 import { DEFAULT_COMPANY_ID } from "@/data/companies";
-import { buildCallerMemory, selectCallerHistory } from "@/services/caller-memory";
-import type { CallerMemory } from "@/domain/caller";
+import { getContextPackProvider } from "@/services/ports";
 
 export const dynamic = "force-dynamic";
 
@@ -35,12 +34,12 @@ export async function GET(req: Request) {
     return NextResponse.json({ error: `Contexte incomplet pour ${companyId}` }, { status: 404 });
   }
 
-  // Dossier client synthétisé : historique des appels de CE numéro pour CE
-  // tenant. selectCallerHistory() ferme les deux fuites — numéro masqué (aucune
-  // mémoire) et croisement de tenant — ; buildCallerMemory() retourne undefined
-  // sans antécédent. L'agente ne prétend jamais une mémoire qu'elle n'a pas.
-  const previous = selectCallerHistory(await store.listCalls(companyId), companyId, from);
-  const callerMemory: CallerMemory | undefined = buildCallerMemory(previous);
+  // Dossier client via le port ContextPackProvider (ADR-020) : aujourd'hui
+  // LocalContextPackProvider dérive des appels locaux (gardes anti-croisement
+  // de tenant et numéro masqué incluses) ; demain MemexContextPackProvider —
+  // même contrat, cette route ne change pas. L'agente ne prétend jamais une
+  // mémoire qu'elle n'a pas (callerMemory absent = aucun antécédent).
+  const contextPack = await getContextPackProvider().getContextPack(companyId, from);
 
-  return NextResponse.json({ company, agent, script, callerMemory });
+  return NextResponse.json({ company, agent, script, callerMemory: contextPack.callerMemory });
 }

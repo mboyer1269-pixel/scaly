@@ -35,6 +35,8 @@ import { getScriptByIndustry } from "@/data/industry-scripts";
 import { packSupportsCapability, requireCapability } from "@/data/capabilities";
 import { canFollowUp, consentFromCall } from "@/services/consent";
 import { createPostCallNotification } from "@/services/owner-notifications";
+import { tryAppendRuntimeEvent, type EventOutboxRepository } from "@/services/event-outbox";
+import { redactPhone } from "@/domain/runtime-event";
 import { newId } from "@/lib/format";
 
 /* ------------------------------------------------------------------ */
@@ -164,6 +166,8 @@ interface EngineOptions {
   repo?: GapRecoveryRepository;
   audit?: GapRecoveryAuditSink;
   now?: Date;
+  /** Outbox de la frontière (ADR-020) — injectable en test comme le repo. */
+  events?: EventOutboxRepository;
 }
 
 function resolve(options?: EngineOptions) {
@@ -171,6 +175,7 @@ function resolve(options?: EngineOptions) {
     repo: options?.repo ?? getGapRecoveryRepository(),
     audit: options?.audit ?? defaultAuditSink(),
     now: options?.now ?? new Date(),
+    events: options?.events,
   };
 }
 
@@ -457,7 +462,7 @@ export async function openAppointmentGap(
   if (input.companyId !== company.id) throw new GapRecoveryError("companyId incohérent avec l'entreprise résolue.");
   if (!input.humanLabel?.trim()) throw new GapRecoveryError("humanLabel obligatoire — la plage doit rester lisible sans calendrier.");
   requireCapability(GAP_RECOVERY_CAPABILITY); // échec propre AVANT toute écriture si la capability disparaît du registre
-  const { repo, audit, now } = resolve(options);
+  const { repo, audit, now, events } = resolve(options);
   const pack = getIndustryPack(company.industry); // repli PME : gabarits et taxonomie toujours résolus
 
   if (input.idempotencyKey) {
@@ -490,6 +495,23 @@ export async function openAppointmentGap(
     companyId: gap.companyId,
     detail: `${gap.id} · ${gap.humanLabel}${gap.serviceCategory ? ` · ${gap.serviceCategory}` : ""} · source ${gap.source}`,
   });
+  // Frontière (ADR-020) — jamais ré-émis sur le retour idempotent plus haut.
+  await tryAppendRuntimeEvent(
+    {
+      companyId: gap.companyId,
+      type: "recovery.gap_opened",
+      correlationId: gap.id,
+      occurredAt: nowIso,
+      payload: {
+        gapId: gap.id,
+        humanLabel: gap.humanLabel,
+        serviceCategory: gap.serviceCategory ?? null,
+        gapSource: gap.source,
+        industryPackId: gap.industryPackId ?? null,
+      },
+    },
+    { now, repo: events },
+  );
 
   const offers = await prepareOffersForGap(gap.id, company, { ...options, maxCandidates: input.maxCandidates });
   const fresh = (await repo.getGap(gap.id)) ?? gap;
@@ -645,11 +667,23 @@ export async function confirmRecoveryOffer(
   options?: EngineOptions,
   notify?: ConfirmNotifyContext,
 ): Promise<RecoveryOffer> {
-  const { repo, audit, now } = resolve(options);
+  const { repo, audit, now, events } = resolve(options);
   const offer = await loadTenantOffer(repo, companyId, offerId);
   const confirmed = transitionOffer(offer, "confirmed", now);
   await repo.saveOffer(confirmed);
   await audit.record({ event: "recovery_offer.confirmed", companyId, detail: `${offer.id} · plage ${offer.gapId}` });
+  // Frontière (ADR-020) — le moment ROI. Double-OUI protégé par transitionOffer
+  // (confirmed → [] jette), donc jamais de double événement.
+  await tryAppendRuntimeEvent(
+    {
+      companyId,
+      type: "recovery.offer_confirmed",
+      correlationId: offer.gapId,
+      dedupeKey: `recovery.offer_confirmed:${offer.id}`,
+      payload: { offerId: offer.id, gapId: offer.gapId, waitlistEntryId: offer.waitlistEntryId },
+    },
+    { now, repo: events },
+  );
 
   const entry = await repo.getWaitlistEntry(offer.waitlistEntryId);
   if (entry && entry.companyId === companyId && (entry.status === "active" || entry.status === "contacted")) {
@@ -1010,7 +1044,7 @@ export async function sendPreparedOffers(
   smsPort: RecoverySmsPort | undefined,
   options?: EngineOptions,
 ): Promise<SendPreparedOffersResult> {
-  const { repo, audit, now } = resolve(options);
+  const { repo, audit, now, events } = resolve(options);
   const result: SendPreparedOffersResult = { sent: [], blocked: [] };
 
   for (const offer of await repo.listOffers(company.id)) {
@@ -1042,6 +1076,24 @@ export async function sendPreparedOffers(
       await repo.saveOffer(sent);
       await repo.saveWaitlistEntry({ ...entry, status: "contacted", updatedAt: now.toISOString() });
       await audit.record({ event: "recovery_offer.sent", companyId: company.id, detail: `${offer.id} · ${canonicalPhone(entry.phone)}` });
+      // Frontière (ADR-020) — émis APRÈS le consent gate et l'envoi réussi.
+      await tryAppendRuntimeEvent(
+        {
+          companyId: company.id,
+          type: "recovery.offer_sent",
+          correlationId: offer.gapId,
+          externalId: deliveryId,
+          dedupeKey: `recovery.offer_sent:${offer.id}`,
+          payload: {
+            offerId: offer.id,
+            gapId: offer.gapId,
+            waitlistEntryId: offer.waitlistEntryId,
+            phone: redactPhone(entry.phone),
+            channel: "sms",
+          },
+        },
+        { now, repo: events },
+      );
       result.sent.push(sent);
     } catch (err) {
       const failed = transitionOffer(offer, "failed", now);
@@ -1051,6 +1103,21 @@ export async function sendPreparedOffers(
         companyId: company.id,
         detail: `${offer.id} · ${err instanceof Error ? err.message.slice(0, 120) : "erreur d'envoi"}`,
       });
+      await tryAppendRuntimeEvent(
+        {
+          companyId: company.id,
+          type: "runtime.failure",
+          correlationId: offer.gapId,
+          dedupeKey: `runtime.failure:offer:${offer.id}`,
+          payload: {
+            component: "sms",
+            offerId: offer.id,
+            gapId: offer.gapId,
+            error: err instanceof Error ? err.message.slice(0, 120) : "erreur d'envoi",
+          },
+        },
+        { now, repo: events },
+      );
       result.blocked.push({ offer: failed, reason: "échec d'envoi" });
     }
   }

@@ -14,6 +14,8 @@ import { isRevocationMessage } from "@/services/consent";
 import { handleOfferReply } from "@/services/gap-recovery";
 import { isSmsConfigured, sendSms } from "@/adapters/integrations/twilio-sms";
 import { canonicalPhone } from "@/domain/consent";
+import { tryAppendRuntimeEvent } from "@/services/event-outbox";
+import { redactPhone } from "@/domain/runtime-event";
 
 export const dynamic = "force-dynamic";
 
@@ -70,6 +72,17 @@ export async function POST(req: Request) {
       actor: "twilio",
       event: "consentement_révoqué",
       detail: `${from} · ${revoked} consentement(s) révoqué(s) par texto — plus aucune relance automatique.`,
+    });
+    // Frontière (ADR-020) : le retrait est un fait business de premier ordre.
+    // Pas de callSid ici — corrélation par numéro canonique, dédup par MessageSid.
+    const messageSid = params["MessageSid"];
+    await tryAppendRuntimeEvent({
+      companyId: company.id,
+      type: "sms.opt_out_received",
+      correlationId: `sms:${canonicalPhone(from)}`,
+      externalId: messageSid,
+      dedupeKey: messageSid ? `sms.opt_out_received:${messageSid}` : undefined,
+      payload: { phone: redactPhone(from), revokedCount: revoked },
     });
     return smsReply("C'est noté : vous ne recevrez plus de rappels ni de textos de suivi de notre part. / You will no longer receive follow-up calls or texts from us.");
   }

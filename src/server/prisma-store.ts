@@ -613,6 +613,7 @@ export class PrismaStore implements ScalyRepository {
       recoveryOffers,
       appointmentGaps,
       waitlistEntries,
+      runtimeEvents,
       _auditLog,
       company,
     ] = await prisma.$transaction([
@@ -631,6 +632,7 @@ export class PrismaStore implements ScalyRepository {
       prisma.recoveryOffer.deleteMany({ where: { companyId } }),
       prisma.appointmentGap.deleteMany({ where: { companyId } }),
       prisma.waitlistEntry.deleteMany({ where: { companyId } }),
+      prisma.runtimeEvent.deleteMany({ where: { companyId } }),
       prisma.auditLog.updateMany({ where: { companyId }, data: { companyId: null } }),
       prisma.company.deleteMany({ where: { id: companyId } }),
     ]);
@@ -651,6 +653,7 @@ export class PrismaStore implements ScalyRepository {
         ownerNotifications: ownerNotifications.count,
         reviewRequests: reviewRequests.count,
         gapRecovery: recoveryOffers.count + appointmentGaps.count + waitlistEntries.count,
+        runtimeEvents: runtimeEvents.count,
       },
     };
   }

@@ -13,6 +13,8 @@ import { relaySessionToken, twimlConnectRelay, twimlConnectStream, twimlFallback
 import { resolveTwilioTenant } from "@/server/twilio-tenant";
 import { VOICE_FALLBACK_ACTION_PATH, persistFallbackCall } from "@/server/voice-fallback";
 import { getScriptById } from "@/data/industry-scripts";
+import { tryAppendRuntimeEvent } from "@/services/event-outbox";
+import { redactPhone } from "@/domain/runtime-event";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +69,27 @@ export async function POST(req: Request) {
     detail: `${callSid} de ${from} vers ${resolved.calledNumber}${authToken ? "" : " · signature NON vérifiée (TWILIO_AUTH_TOKEN absent)"}`,
   });
 
+  // Frontière (ADR-020) : le point UNIQUE par où passe 100 % des appels —
+  // même événement de départ pour le repli humain, le relay et le realtime.
+  const engineConfigured =
+    process.env.SCALY_VOICE_ENGINE === "relay" && process.env.SCALY_RELAY_WS_URL
+      ? "relay"
+      : process.env.SCALY_REALTIME_WS_URL
+        ? "realtime"
+        : "human_fallback";
+  await tryAppendRuntimeEvent({
+    companyId: resolved.company.id,
+    type: "call.session_started",
+    correlationId: callSid,
+    externalId: callSid,
+    payload: {
+      phone: redactPhone(from),
+      calledNumber: redactPhone(resolved.calledNumber),
+      engineConfigured,
+      signatureVerified,
+    },
+  });
+
   const relayWsUrl = process.env.SCALY_RELAY_WS_URL;
   if (process.env.SCALY_VOICE_ENGINE === "relay" && relayWsUrl) {
     const agent = await store.getAgentByCompany(resolved.company.id);
@@ -110,6 +133,14 @@ export async function POST(req: Request) {
   const wsUrl = process.env.SCALY_REALTIME_WS_URL;
   if (!wsUrl) {
     // Repli : pas de service temps réel → l'humain prend l'appel directement.
+    // ≠ runtime.failure : c'est un choix de configuration, pas une panne.
+    await tryAppendRuntimeEvent({
+      companyId: resolved.company.id,
+      type: "runtime.realtime_unavailable",
+      correlationId: callSid,
+      externalId: callSid,
+      payload: { reason: "SCALY_REALTIME_WS_URL absente — repli <Dial> vers l'humain", phone: redactPhone(from) },
+    });
     await persistFallbackCall({ company: resolved.company, callSid, from, signatureVerified });
     return xml(twimlFallbackTransfer({ to: resolved.company.transferPhone, lang: resolved.company.defaultLanguage, companyName: resolved.company.name }));
   }

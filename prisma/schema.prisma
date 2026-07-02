@@ -59,6 +59,7 @@ model Company {
   waitlistEntries WaitlistEntry[]
   appointmentGaps AppointmentGap[]
   recoveryOffers RecoveryOffer[]
+  runtimeEvents RuntimeEvent[]
 }
 
 // Coffre de consentements (ADR-018) — par personne, opposable, révocable.
@@ -356,6 +357,32 @@ model RecoveryOffer {
   @@unique([companyId, idempotencyKey])
   @@index([companyId, status])
   @@index([companyId, gapId])
+}
+
+// Event Outbox de la frontière Scaly (ADR-020) — chaque moment métier devient
+// un événement JSON-safe, sans secret ni transcript, prêt pour Oria Action
+// Ledger. Idempotence par (companyId, dedupeKey) ; dates écrites par le domaine.
+model RuntimeEvent {
+  id            String   @id
+  companyId     String
+  type          String   // call.session_started | call.transferred | call.completed | consent.captured | sms.opt_out_received | opportunity.detected | recovery.gap_opened | recovery.offer_sent | recovery.offer_confirmed | owner.notification_sent | runtime.failure | runtime.realtime_unavailable
+  occurredAt    DateTime
+  correlationId String   // callSid Twilio (voix) ou sms:<phone canonique> (SMS)
+  externalId    String?
+  dedupeKey     String
+  schemaVersion Int
+  payload       Json     // JSON-safe, caviardé (jamais de secret ni transcript)
+  status        String   // pending | delivered | failed
+  attempts      Int
+  lastError     String?
+  createdAt     DateTime
+  updatedAt     DateTime
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, dedupeKey])
+  @@index([companyId, status])
+  @@index([companyId, correlationId])
 }
 
 // Demande d'avis (PR #27) — preuve sociale mesurable, permission-aware.
