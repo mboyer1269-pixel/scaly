@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
 import { checkpointStaleMinutesFromEnv, expireStaleCheckpoints } from "@/services/checkpoint-expiry";
+import { purgeExpiredWaitlistNotes } from "@/services/gap-recovery";
 
 export const dynamic = "force-dynamic";
 
@@ -22,7 +23,13 @@ async function handle(req: Request) {
   const result = await store.purgeExpiredTranscripts();
   // Brouillons in_progress orphelins (double panne pont + callback) → abandoned.
   const stale = await expireStaleCheckpoints(store, { staleMinutes: checkpointStaleMinutesFromEnv() });
-  return NextResponse.json({ ok: true, ...result, staleCheckpoints: stale.expired, at: new Date().toISOString() });
+  // Notes d'intention de la liste d'attente (extraits de conversation) — même
+  // rétention que les transcripts, même loi (25).
+  let waitlistNotesPurged = 0;
+  for (const company of await store.listCompanies()) {
+    waitlistNotesPurged += await purgeExpiredWaitlistNotes(company);
+  }
+  return NextResponse.json({ ok: true, ...result, staleCheckpoints: stale.expired, waitlistNotesPurged, at: new Date().toISOString() });
 }
 
 export const GET = handle;

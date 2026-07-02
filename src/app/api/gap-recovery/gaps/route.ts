@@ -20,8 +20,12 @@ import {
 } from "@/services/gap-recovery";
 import { isSmsConfigured, sendSms } from "@/adapters/integrations/twilio-sms";
 import { isJsonObject } from "@/lib/request-body";
+import { clientKey, createRateLimiter, tooManyRequests } from "@/lib/rate-limit";
 
 export const dynamic = "force-dynamic";
+
+/** Ouvrir une plage déclenche des SMS sortants : plafond bas contre l'abus naïf. */
+const limiter = createRateLimiter(30, 10 * 60_000);
 
 export async function GET() {
   const companyId = await resolveCompanyId();
@@ -35,6 +39,8 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const gate = limiter.check(clientKey(req));
+  if (!gate.allowed) return tooManyRequests(gate.retryAfterSec);
   const companyId = await resolveCompanyId();
   const company = await getStore().getCompany(companyId);
   if (!company) return NextResponse.json({ error: "Entreprise introuvable" }, { status: 404 });

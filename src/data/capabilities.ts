@@ -31,6 +31,7 @@ export const APPOINTMENT_GAP_RECOVERY: CapabilityDefinition = {
   auditEvents: [
     "waitlist.entry_created",
     "waitlist.entry_cancelled",
+    "waitlist.notes_purged",
     "appointment_gap.opened",
     "appointment_gap.filled",
     "appointment_gap.cancelled",
@@ -38,6 +39,7 @@ export const APPOINTMENT_GAP_RECOVERY: CapabilityDefinition = {
     "recovery_offer.prepared",
     "recovery_offer.sent",
     "recovery_offer.confirmed",
+    "recovery_offer.gap_taken_notice",
     "recovery_offer.declined",
     "recovery_offer.cancelled",
     "recovery_offer.expired",

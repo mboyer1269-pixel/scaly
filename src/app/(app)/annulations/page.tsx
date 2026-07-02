@@ -196,8 +196,9 @@ export default async function AnnulationsPage() {
 
       <HonestyNote>
         Aucun texto ne part sans consentement actif au registre — STOP arrête tout, immédiatement. Le message
-        n'affirme jamais que la plage est réservée : c'est vous (ou une réponse OUI) qui confirmez. Les offres
-        sans réponse expirent après 48 h.
+        n'affirme jamais que la plage est réservée : c'est vous (ou une réponse OUI) qui confirmez. Premier OUI
+        l'emporte, et les autres reçoivent automatiquement un mot honnête « la plage a été prise — vous restez
+        sur la liste ». Les offres sans réponse expirent après 48 h.
       </HonestyNote>
     </>
   );

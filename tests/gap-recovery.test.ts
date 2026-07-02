@@ -34,6 +34,7 @@ import {
   matchWaitlistCandidates,
   openAppointmentGap,
   prepareOffersForGap,
+  purgeExpiredWaitlistNotes,
   sendPreparedOffers,
   transitionOffer,
   type GapRecoveryAuditEvent,
@@ -590,6 +591,118 @@ describe("réponse entrante OUI/NON — la boucle se ferme par texto", () => {
       if (prevStore === undefined) delete g.__scalyStore; else g.__scalyStore = prevStore;
       if (prevRepo === undefined) delete g.__scalyGapRecovery; else g.__scalyGapRecovery = prevRepo;
     }
+  });
+});
+
+describe("premier OUI gagne — les autres sont prévenus, jamais laissés en suspens", () => {
+  async function twoSentOffers(options: ReturnType<typeof engine>["options"], repo: InMemoryGapRecoveryRepository) {
+    const a = await repo.saveWaitlistEntry(entry({ id: "w_a", phone: "819-555-0001", createdAt: "2026-07-01T08:00:00.000Z" }));
+    const b = await repo.saveWaitlistEntry(entry({ id: "w_b", phone: "819-555-0002", createdAt: "2026-07-01T09:00:00.000Z" }));
+    await openedGap(options, { serviceCategory: undefined });
+    const consents = [activeConsent(a.phone), activeConsent(b.phone)];
+    await sendPreparedOffers(DENTAL, consents, { send: async () => ({ deliveryId: "SM" }) }, options);
+    return { a, b, consents };
+  }
+
+  it("A dit OUI → B reçoit le message de clôture (entreprise, plage, STOP, rien promis) + audit", async () => {
+    const { options, repo, audits } = engine();
+    const { a, b, consents } = await twoSentOffers(options, repo);
+    const courtesy: { to: string; body: string }[] = [];
+    const notify = { company: DENTAL, smsPort: { send: async (to: string, body: string) => { courtesy.push({ to, body }); return {}; } }, consents };
+
+    const result = await handleOfferReply(DENTAL, a.phone, "OUI", options, notify);
+    expect(result.handled).toBe(true);
+
+    expect(courtesy).toHaveLength(1);
+    expect(courtesy[0].to).toBe(b.phone);
+    expect(courtesy[0].body).toContain(DENTAL.name);
+    expect(courtesy[0].body).toContain("jeudi 3 juillet à 14 h");
+    expect(courtesy[0].body).toMatch(/STOP/);
+    expect(courtesy[0].body).not.toMatch(/garanti|réservé/i);
+    const bOffer = (await repo.listOffers(DENTAL.id)).find((o) => o.waitlistEntryId === b.id)!;
+    expect(bOffer.status).toBe("cancelled");
+    expect(bOffer.cancelReason).toBe("plage comblée");
+    expect(audits.map((x) => x.event)).toContain("recovery_offer.gap_taken_notice");
+  });
+
+  it("B a texté STOP entre-temps → PAS de message de clôture (le consent gate couvre même la courtoisie)", async () => {
+    const { options, repo } = engine();
+    const { a, b } = await twoSentOffers(options, repo);
+    const consents = [
+      activeConsent(a.phone),
+      activeConsent(b.phone, { status: "revoque", capturedAt: "2026-07-02T09:00:00.000Z" }),
+    ];
+    const courtesy: string[] = [];
+    const notify = { company: DENTAL, smsPort: { send: async (to: string) => { courtesy.push(to); return {}; } }, consents };
+    await handleOfferReply(DENTAL, a.phone, "OUI", options, notify);
+    expect(courtesy).toHaveLength(0); // annulée en silence — jamais de SMS à un révoqué
+    const bOffer = (await repo.listOffers(DENTAL.id)).find((o) => o.waitlistEntryId === b.id)!;
+    expect(bOffer.status).toBe("cancelled");
+  });
+
+  it("OUI TARDIF de B (plage déjà prise) → explication honnête, aucun état ne change", async () => {
+    const { options, repo } = engine();
+    const { a, b, consents } = await twoSentOffers(options, repo);
+    const notify = { company: DENTAL, smsPort: { send: async () => ({}) }, consents };
+    await handleOfferReply(DENTAL, a.phone, "OUI", options, notify);
+
+    const late = await handleOfferReply(DENTAL, b.phone, "OUI", options, notify);
+    expect(late.handled).toBe(true);
+    expect(late.reply).toMatch(/déjà été prise|vient tout juste d'être prise/);
+    expect(late.reply).toMatch(/STOP/);
+    const after = (await repo.listOffers(DENTAL.id)).find((o) => o.waitlistEntryId === b.id)!;
+    expect(after.status).toBe("cancelled"); // rien n'a bougé
+    expect((await repo.listGaps(DENTAL.id))[0].status).toBe("filled");
+  });
+
+  it("A re-texte OUI après sa confirmation → rassuré, pas de double traitement", async () => {
+    const { options, repo } = engine();
+    const { a, consents } = await twoSentOffers(options, repo);
+    const notify = { company: DENTAL, smsPort: { send: async () => ({}) }, consents };
+    await handleOfferReply(DENTAL, a.phone, "OUI", options, notify);
+    const again = await handleOfferReply(DENTAL, a.phone, "OUI", options, notify);
+    expect(again.handled).toBe(true);
+    expect(again.reply).toMatch(/déjà noté/);
+  });
+
+  it("OUI tardif sur une offre EXPIRÉE → réponse honnête, la personne reste sur la liste", async () => {
+    const { options, repo } = engine();
+    const e = await repo.saveWaitlistEntry(entry());
+    await openedGap(options, { serviceCategory: undefined });
+    await sendPreparedOffers(DENTAL, [activeConsent(e.phone)], { send: async () => ({}) }, options);
+    const later = new Date(NOW.getTime() + (OFFER_TTL_HOURS + 1) * 3600 * 1000);
+    await expireStaleGapRecovery(DENTAL, OFFER_TTL_HOURS, { ...options, now: later });
+
+    const late = await handleOfferReply(DENTAL, e.phone, "OUI", { ...options, now: later });
+    expect(late.handled).toBe(true);
+    expect(late.reply).toMatch(/expiré/);
+    expect((await repo.getWaitlistEntry(e.id))?.status).toBe("contacted"); // toujours joignable
+  });
+
+  it("échec d'envoi de la courtoisie → la confirmation reste intacte (best-effort)", async () => {
+    const { options, repo } = engine();
+    const { a, consents } = await twoSentOffers(options, repo);
+    const notify = { company: DENTAL, smsPort: { send: async () => { throw new Error("Twilio 500"); } }, consents };
+    const result = await handleOfferReply(DENTAL, a.phone, "OUI", options, notify);
+    expect(result.handled).toBe(true);
+    expect((await repo.listGaps(DENTAL.id))[0].status).toBe("filled");
+  });
+});
+
+describe("purge Loi 25 — les notes d'intention suivent la rétention du tenant", () => {
+  it("les notes vieilles sont vidées, les récentes intactes, repasser est un no-op", async () => {
+    const { options, repo, audits } = engine();
+    const retention = DENTAL.compliance.retentionDays;
+    const oldDate = new Date(NOW.getTime() - (retention + 1) * 86_400_000).toISOString();
+    const oldEntry = await repo.saveWaitlistEntry(entry({ id: "w_old", notes: "extrait de conversation sensible", createdAt: oldDate, updatedAt: oldDate }));
+    const fresh = await repo.saveWaitlistEntry(entry({ id: "w_new", phone: "819-555-0009", notes: "extrait récent", createdAt: NOW.toISOString(), updatedAt: NOW.toISOString() }));
+
+    expect(await purgeExpiredWaitlistNotes(DENTAL, options)).toBe(1);
+    expect((await repo.getWaitlistEntry(oldEntry.id))?.notes).toBeUndefined();
+    expect((await repo.getWaitlistEntry(oldEntry.id))?.status).toBe("active"); // l'entrée survit, le verbatim part
+    expect((await repo.getWaitlistEntry(fresh.id))?.notes).toBe("extrait récent");
+    expect(audits.map((a) => a.event)).toContain("waitlist.notes_purged");
+    expect(await purgeExpiredWaitlistNotes(DENTAL, options)).toBe(0);
   });
 });
 

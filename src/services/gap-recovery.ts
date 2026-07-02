@@ -592,14 +592,34 @@ export async function cancelRecoveryOffer(
 }
 
 /**
+ * Contexte de courtoisie « premier arrivé, premier servi » : quand une offre
+ * est confirmée, les personnes qui avaient REÇU le texto (offres sœurs `sent`)
+ * sont prévenues que la plage est prise — au lieu de rester devant un message
+ * qui promet encore une place. Optionnel et best-effort : sans port SMS ou
+ * sans consentement encore actif, on annule sans texto (jamais de spam).
+ */
+export interface ConfirmNotifyContext {
+  company: Company;
+  smsPort?: RecoverySmsPort;
+  consents?: ConsentRecord[];
+}
+
+/** Message de clôture aux non-retenus — identifie l'entreprise, ne promet rien, offre STOP. */
+export function buildGapTakenMessage(company: Company, humanLabel: string): string {
+  return `${company.name} : la plage ${humanLabel} vient d'être prise — première réponse l'emporte. Vous restez sur la liste et on vous fera signe dès qu'une autre place se libère. Répondez STOP pour ne plus recevoir ces alertes.`;
+}
+
+/**
  * Confirme une offre (la personne a dit OUI et l'équipe a validé) :
  * offre → confirmed, entrée → confirmed, plage → filled, et les offres
  * SŒURS encore livrables sont annulées (on ne relance pas pour une plage comblée).
+ * Avec `notify`, les sœurs déjà ENVOYÉES reçoivent le message de clôture consenti.
  */
 export async function confirmRecoveryOffer(
   companyId: string,
   offerId: string,
   options?: EngineOptions,
+  notify?: ConfirmNotifyContext,
 ): Promise<RecoveryOffer> {
   const { repo, audit, now } = resolve(options);
   const offer = await loadTenantOffer(repo, companyId, offerId);
@@ -618,8 +638,32 @@ export async function confirmRecoveryOffer(
   }
   for (const sibling of await repo.listOffers(companyId, offer.gapId)) {
     if (sibling.id !== offer.id && (sibling.status === "prepared" || sibling.status === "sent")) {
+      const wasSent = sibling.status === "sent";
       await repo.saveOffer(transitionOffer(sibling, "cancelled", now, { cancelReason: "plage comblée" }));
       await audit.record({ event: "recovery_offer.cancelled", companyId, detail: `${sibling.id} · plage comblée` });
+
+      // Message de clôture aux personnes qui avaient reçu l'offre — consentement
+      // revérifié À L'ENVOI (un STOP entre-temps bloque même la courtoisie).
+      if (wasSent && notify?.smsPort && gap) {
+        const siblingEntry = await repo.getWaitlistEntry(sibling.waitlistEntryId);
+        if (
+          siblingEntry &&
+          siblingEntry.companyId === companyId &&
+          siblingEntry.status !== "cancelled" &&
+          canFollowUp(notify.consents ?? [], siblingEntry.phone, "rappel")
+        ) {
+          try {
+            await notify.smsPort.send(siblingEntry.phone, buildGapTakenMessage(notify.company, gap.humanLabel));
+            await audit.record({
+              event: "recovery_offer.gap_taken_notice",
+              companyId,
+              detail: `${sibling.id} · ${canonicalPhone(siblingEntry.phone)} avisé que la plage est prise`,
+            });
+          } catch {
+            // La courtoisie est best-effort : son échec ne bloque jamais la confirmation.
+          }
+        }
+      }
     }
   }
   return confirmed;
@@ -723,6 +767,34 @@ export async function findActionableOfferForPhone(
     .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
 }
 
+/** Fenêtre pendant laquelle une réponse TARDIVE mérite encore une explication (pas un message générique). */
+const LATE_REPLY_WINDOW_DAYS = 7;
+
+/**
+ * L'offre récente FERMÉE de ce numéro (confirmée, plage comblée entre-temps,
+ * ou expirée) — pour répondre honnêtement à un OUI/NON arrivé trop tard.
+ */
+async function findRecentClosedOfferForPhone(
+  companyId: string,
+  phone: string,
+  options?: EngineOptions,
+): Promise<RecoveryOffer | undefined> {
+  const { repo, now } = resolve(options);
+  const canon = canonicalPhone(phone);
+  const entries = await repo.listWaitlistEntries(companyId);
+  const mine = new Set(entries.filter((e) => canonicalPhone(e.phone) === canon).map((e) => e.id));
+  if (mine.size === 0) return undefined;
+  const oldest = new Date(now.getTime() - LATE_REPLY_WINDOW_DAYS * 24 * 3600 * 1000).toISOString();
+  return (await repo.listOffers(companyId))
+    .filter(
+      (o) =>
+        mine.has(o.waitlistEntryId) &&
+        o.createdAt >= oldest &&
+        (o.status === "confirmed" || o.status === "expired" || (o.status === "cancelled" && o.cancelReason === "plage comblée")),
+    )
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+}
+
 export interface OfferReplyResult {
   handled: boolean;
   /** Réponse SMS prête à retourner à la personne (FR, honnête, jamais de promesse). */
@@ -731,25 +803,54 @@ export interface OfferReplyResult {
 
 /**
  * Traite un texto entrant comme réponse à une offre : OUI → confirmée (plage
- * comblée, offres sœurs annulées), NON → déclinée. Si la personne n'a aucune
- * offre envoyée en attente, on ne touche à RIEN (handled: false) — le reste
- * du pipeline SMS (STOP, propriétaire, tiers) garde la main.
+ * comblée, offres sœurs annulées ET prévenues si `notify` est fourni), NON →
+ * déclinée. Une réponse TARDIVE (plage déjà prise, offre expirée, double OUI)
+ * reçoit une explication honnête au lieu du message générique. Sans offre du
+ * tout, on ne touche à RIEN (handled: false) — le reste du pipeline SMS
+ * (STOP, propriétaire, tiers) garde la main.
  */
 export async function handleOfferReply(
   company: Company,
   from: string,
   body: string,
   options?: EngineOptions,
+  notify?: ConfirmNotifyContext,
 ): Promise<OfferReplyResult> {
   const yes = isOfferYesReply(body);
   const no = isOfferNoReply(body);
   if (!yes && !no) return { handled: false };
 
   const offer = await findActionableOfferForPhone(company.id, from, options);
-  if (!offer) return { handled: false };
+  if (!offer) {
+    // Réponse tardive : l'offre de cette personne vient d'être fermée — on
+    // explique au lieu de servir le message générique (aucun état ne change).
+    const closed = await findRecentClosedOfferForPhone(company.id, from, options);
+    if (!closed) return { handled: false };
+    if (closed.status === "confirmed") {
+      return {
+        handled: true,
+        reply: yes
+          ? `C'est déjà noté ! L'équipe de ${company.name} vous confirme la plage rapidement.`
+          : `C'est noté — si vous ne pouvez plus prendre la plage, appelez ${company.name} pour qu'on la libère.`,
+      };
+    }
+    if (closed.status === "expired") {
+      return {
+        handled: true,
+        reply: `Merci pour votre réponse ! Cette offre de ${company.name} a expiré entre-temps, mais vous restez sur la liste — on vous fera signe dès qu'une place se libère. Répondez STOP pour ne plus recevoir ces alertes.`,
+      };
+    }
+    // cancelled · « plage comblée » : quelqu'un d'autre a répondu avant.
+    return {
+      handled: true,
+      reply: yes
+        ? `Merci d'avoir répondu ! La plage vient tout juste d'être prise — première réponse l'emporte. Vous restez sur la liste de ${company.name} et on vous fera signe à la prochaine. Répondez STOP pour ne plus recevoir ces alertes.`
+        : `C'est noté, merci ! Vous restez sur la liste de ${company.name}. Répondez STOP pour ne plus recevoir ces alertes.`,
+    };
+  }
 
   if (yes) {
-    await confirmRecoveryOffer(company.id, offer.id, options);
+    await confirmRecoveryOffer(company.id, offer.id, options, notify);
     return {
       handled: true,
       reply: `Parfait, c'est noté ! L'équipe de ${company.name} vous confirme la plage rapidement. Si vous changez d'idée, répondez NON ou appelez-nous.`,
@@ -803,6 +904,38 @@ export async function expireStaleGapRecovery(
     }
   }
   return result;
+}
+
+/* ------------------------------------------------------------------ */
+/* Purge Loi 25 — les notes d'entrée sont des extraits de conversation  */
+/* ------------------------------------------------------------------ */
+
+/**
+ * Vide les `notes` (evidence verbatim de l'intention) des entrées plus vieilles
+ * que la rétention du tenant — même contrat que la purge des transcripts :
+ * l'entrée opérationnelle survit, le verbatim disparaît. Idempotent.
+ */
+export async function purgeExpiredWaitlistNotes(
+  company: Company,
+  options?: EngineOptions,
+): Promise<number> {
+  const { repo, audit, now } = resolve(options);
+  const cutoff = new Date(now.getTime() - company.compliance.retentionDays * 86_400_000).toISOString();
+  let purged = 0;
+  for (const entry of await repo.listWaitlistEntries(company.id)) {
+    if (entry.notes && entry.createdAt < cutoff) {
+      await repo.saveWaitlistEntry({ ...entry, notes: undefined, updatedAt: now.toISOString() });
+      purged += 1;
+    }
+  }
+  if (purged > 0) {
+    await audit.record({
+      event: "waitlist.notes_purged",
+      companyId: company.id,
+      detail: `${purged} note(s) d'intention purgée(s) — rétention ${company.compliance.retentionDays} j`,
+    });
+  }
+  return purged;
 }
 
 /* ------------------------------------------------------------------ */

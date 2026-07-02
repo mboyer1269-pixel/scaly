@@ -12,6 +12,7 @@ import { resolveTwilioTenant } from "@/server/twilio-tenant";
 import { answerOwnerKeyword, parseOwnerKeyword } from "@/services/digest";
 import { isRevocationMessage } from "@/services/consent";
 import { handleOfferReply } from "@/services/gap-recovery";
+import { isSmsConfigured, sendSms } from "@/adapters/integrations/twilio-sms";
 import { canonicalPhone } from "@/domain/consent";
 
 export const dynamic = "force-dynamic";
@@ -73,12 +74,20 @@ export async function POST(req: Request) {
     return smsReply("C'est noté : vous ne recevrez plus de rappels ni de textos de suivi de notre part. / You will no longer receive follow-up calls or texts from us.");
   }
 
-  // Réponse à une offre de plage libérée : OUI confirme, NON décline — la
-  // boucle de remplissage se ferme par texto, sans que la réception s'en mêle.
-  // Best-effort : sans offre envoyée pour ce numéro, le pipeline continue.
+  // Réponse à une offre de plage libérée : OUI confirme (et les personnes qui
+  // avaient reçu le texto sont prévenues que la plage est prise — premier
+  // arrivé, premier servi, sans laisser personne en suspens), NON décline.
+  // Best-effort : sans offre pour ce numéro, le pipeline continue.
   if (canonicalPhone(from) !== canonicalPhone(company.transferPhone)) {
     try {
-      const offerReply = await handleOfferReply(company, from, body);
+      const notify = {
+        company,
+        smsPort: isSmsConfigured()
+          ? { send: async (to: string, text: string) => ({ deliveryId: (await sendSms(to, text)).sid }) }
+          : undefined,
+        consents: await store.listConsents(company.id),
+      };
+      const offerReply = await handleOfferReply(company, from, body, undefined, notify);
       if (offerReply.handled && offerReply.reply) return smsReply(offerReply.reply);
     } catch {
       // Une erreur du moteur d'offres ne doit jamais casser le webhook SMS.
