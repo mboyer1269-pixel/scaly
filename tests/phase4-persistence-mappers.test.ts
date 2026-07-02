@@ -69,6 +69,7 @@ describe("owner notification mapper", () => {
       createdAt: NOW,
       updatedAt: LATER,
       sentAt: LATER,
+      deliveryClaimedAt: LATER,
       providerMessageId: "SM_abc",
     };
     expect(ownerNotificationFromDb(ownerNotificationToDb(item))).toEqual(item);

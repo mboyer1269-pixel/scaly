@@ -20,12 +20,13 @@ export interface OwnerNotificationRepository {
   get(id: string): Promise<OwnerNotification | undefined>;
   save(notification: OwnerNotification): Promise<OwnerNotification>;
   /**
-   * Réserve ATOMIQUEMENT une notification pending pour livraison (pending -> sent).
-   * Retourne true seulement si CET appel l'a réservée : empêche deux crons
-   * concurrents d'envoyer deux fois le même SMS. Le statut réel (échec) est
-   * corrigé après l'envoi par le service de livraison.
+   * Réserve ATOMIQUEMENT une notification pending pour livraison SANS la marquer
+   * envoyée : pose `deliveryClaimedAt`, le statut reste `pending` jusqu'à l'envoi
+   * réel (pas de « sent » fantôme si le process meurt avant l'envoi). Empêche
+   * deux crons d'envoyer deux fois ; une réservation périmée (<= staleBeforeIso,
+   * process mort) est reprise. Retourne true si CET appel l'a réservée.
    */
-  claimForDelivery(companyId: string, id: string, nowIso: string): Promise<boolean>;
+  claimForDelivery(companyId: string, id: string, nowIso: string, staleBeforeIso: string): Promise<boolean>;
   /** Supprime toutes les notifications du tenant (Loi 25). Retourne le nombre supprimé. */
   deleteByCompany(companyId: string): Promise<number>;
 }
@@ -58,10 +59,12 @@ export class InMemoryOwnerNotificationRepository implements OwnerNotificationRep
     return notification;
   }
 
-  async claimForDelivery(companyId: string, id: string, nowIso: string): Promise<boolean> {
+  async claimForDelivery(companyId: string, id: string, nowIso: string, staleBeforeIso: string): Promise<boolean> {
     const current = this.items.get(id);
     if (!current || current.companyId !== companyId || current.status !== "pending") return false;
-    this.items.set(id, { ...current, status: "sent", sentAt: nowIso, updatedAt: nowIso });
+    // Réservation encore fraîche (livraison en cours ailleurs) → on ne double pas.
+    if (current.deliveryClaimedAt && current.deliveryClaimedAt > staleBeforeIso) return false;
+    this.items.set(id, { ...current, deliveryClaimedAt: nowIso, updatedAt: nowIso });
     return true;
   }
 
@@ -133,7 +136,7 @@ export interface PostCallNotificationInput {
   recommendedAction: string;
   urgency: Urgency;
   title?: string;
-  type?: Extract<OwnerNotificationType, "post_call_summary" | "escalation" | "follow_up_needed">;
+  type?: Extract<OwnerNotificationType, "post_call_summary" | "escalation" | "follow_up_needed" | "gap_filled">;
   sourceCallId?: string;
   sourceTraceId?: string;
   modelCostEstimateCad?: number;
@@ -143,6 +146,7 @@ const POST_CALL_TITLES: Record<PostCallNotificationInput["type"] & string, strin
   post_call_summary: "Récapitulatif d'appel",
   escalation: "Escalade — décision requise",
   follow_up_needed: "Suivi requis",
+  gap_filled: "🎉 Plage comblée",
 };
 
 export async function createPostCallNotification(

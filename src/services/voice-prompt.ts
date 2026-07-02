@@ -11,6 +11,8 @@
 import type { Company } from "@/domain/company";
 import type { VoiceAgentConfig } from "@/domain/agent";
 import type { IndustryScript } from "@/domain/script";
+import type { IndustryPack } from "@/domain/pack";
+import { findIndustryPack } from "@/data/industry-packs";
 import { FIELD_LABELS } from "@/domain/script";
 import type { FinalStatus } from "@/domain/call";
 import { INTENT_LABELS } from "@/domain/call";
@@ -41,6 +43,12 @@ export interface RealtimePromptContext {
   callerNumber?: string;
   /** Dossier synthétisé de l'appelant — alimente la mémoire HONNÊTEMENT. */
   callerMemory?: CallerMemory;
+  /**
+   * Industry Pack du métier. Non fourni → résolu automatiquement depuis
+   * l'industrie de la compagnie (STRICT : une industrie sans pack dédié garde
+   * exactement son prompt d'avant). `null` désactive explicitement le pack.
+   */
+  pack?: IndustryPack | null;
 }
 
 /** « +18194211269 » → « 819 421-1269 » (lisible à voix haute). Null si non exploitable. */
@@ -51,10 +59,11 @@ export function speakablePhone(raw?: string): string | null {
   return `${digits.slice(0, 3)} ${digits.slice(3, 6)}-${digits.slice(6)}`;
 }
 
-export function buildRealtimePrompt({ company, agent, script, callerNumber, callerMemory }: RealtimePromptContext): string {
+export function buildRealtimePrompt({ company, agent, script, callerNumber, callerMemory, pack: packInput }: RealtimePromptContext): string {
   const lines: string[] = [];
   const fr = company.defaultLanguage === "fr";
   const callerPhone = speakablePhone(callerNumber);
+  const pack = packInput === undefined ? findIndustryPack(company.industry) : (packInput ?? undefined);
 
   // --- Identité et divulgation IA (non négociable) ---
   lines.push(`# Identité`);
@@ -272,12 +281,28 @@ export function buildRealtimePrompt({ company, agent, script, callerNumber, call
   }
   lines.push(`Politique de l'entreprise : ${agent.transferPolicy}`);
 
+  // --- Départements du métier (Industry Pack) ---
+  if (pack && pack.transferRouting.length > 0) {
+    lines.push(`# Départements (routage métier)`);
+    lines.push(`Identifie le bon département dès les premières phrases et nomme-le à l'appelant (« Je vous mets en lien avec le service »).`);
+    for (const r of pack.transferRouting) {
+      lines.push(`- ${r.department} — indices : ${r.triggers.join(", ")}. ${r.description}`);
+    }
+  }
+
   // --- Objections ---
   if (script.commonObjections.length > 0) {
     lines.push(`# Objections fréquentes`);
     for (const o of script.commonObjections) {
       lines.push(`- « ${o.objection} » → ${o.response}`);
     }
+  }
+
+  // --- Prudence métier (Industry Pack) : confirmer plutôt qu'affirmer ---
+  if (pack && pack.cautionPhrases.length > 0) {
+    lines.push(`# Prudence métier`);
+    lines.push(`Quand une information doit être confirmée par un humain, dis-le franchement — c'est un gage de sérieux, pas une faiblesse :`);
+    for (const p of pack.cautionPhrases) lines.push(`- « ${p} »`);
   }
 
   // --- Interdictions ---
@@ -289,6 +314,12 @@ export function buildRealtimePrompt({ company, agent, script, callerNumber, call
     lines.push(`Ne prononce JAMAIS ces phrases ou équivalents : ${forbidden.map((f) => `« ${f} »`).join(", ")}.`);
   }
   lines.push(`Sollicitation commerciale (SEO, télémarketing…) → refuse poliment et termine l'appel.`);
+
+  // --- Annulation de RDV : mode relance (Industry Pack) ---
+  if (pack?.cancellation.enabled) {
+    lines.push(`# Annulation de rendez-vous — mode relance`);
+    for (const rule of pack.cancellation.promptRules) lines.push(`- ${rule}`);
+  }
 
   // --- Consentement de rappel (ADR-015 — relance conforme par conception) ---
   lines.push(`# Consentement de rappel (obligatoire avant de clore)`);

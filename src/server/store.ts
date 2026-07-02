@@ -20,6 +20,7 @@ import type { ReviewItem, ReviewStatus } from "@/domain/review";
 import { getBusinessKnowledgeRepository } from "@/services/business-brain";
 import { getOwnerNotificationRepository } from "@/services/owner-notifications";
 import { getReviewRequestRepository } from "@/services/review-requests";
+import { getGapRecoveryRepository } from "@/services/gap-recovery";
 import { buildSeedData } from "./seed";
 
 /** Journal d'audit de conformité (qui a changé quoi, quand). */
@@ -63,6 +64,8 @@ export interface CompanyDeletionResult {
     businessKnowledge: number;
     ownerNotifications: number;
     reviewRequests: number;
+    /** WaitlistEntry + AppointmentGap + RecoveryOffer (remplissage des annulations). */
+    gapRecovery: number;
   };
 }
 
@@ -77,9 +80,18 @@ export interface ScalyRepository {
   updateAgent(companyId: string, patch: Partial<VoiceAgentConfig>): Promise<VoiceAgentConfig | undefined>;
   listCalls(companyId?: string): Promise<Call[]>;
   getCall(id: string): Promise<Call | undefined>;
+  /** Retrouve un appel par son identifiant externe (ex. callSid Twilio) pour l'idempotence. */
+  findCallByExternalId(companyId: string, externalId: string): Promise<Call | undefined>;
   addCall(call: Call, actions: ScalyAction[]): Promise<void>;
   /** Persiste un appel modifié (ex. ré-analyse LLM, purge de transcript). */
   saveCall(call: Call): Promise<Call>;
+  /**
+   * Write conditionnel anti-course : écrit l'appel SEULEMENT s'il est absent
+   * ou encore `in_progress`. Une finalisation concurrente (/complete, repli,
+   * balayeur) gagne TOUJOURS — un flush zombie ne peut jamais écraser un final.
+   * Retourne false si le write a été refusé.
+   */
+  saveCallUnlessFinalized(call: Call): Promise<boolean>;
   listActions(companyId?: string, callId?: string): Promise<ScalyAction[]>;
   getAction(id: string): Promise<ScalyAction | undefined>;
   /** Persiste une action mutée (ex. après executeAction). */
@@ -198,6 +210,12 @@ export class InMemoryStore implements ScalyRepository {
     return this.calls.get(id);
   }
 
+  async findCallByExternalId(companyId: string, externalId: string): Promise<Call | undefined> {
+    return [...this.calls.values()].find(
+      (c) => c.companyId === companyId && c.provenance?.externalId === externalId,
+    );
+  }
+
   async addCall(call: Call, actions: ScalyAction[]): Promise<void> {
     for (const [id, action] of this.actions) {
       if (action.callId === call.id) this.actions.delete(id);
@@ -210,6 +228,13 @@ export class InMemoryStore implements ScalyRepository {
   async saveCall(call: Call): Promise<Call> {
     this.calls.set(call.id, call);
     return call;
+  }
+
+  async saveCallUnlessFinalized(call: Call): Promise<boolean> {
+    const existing = this.calls.get(call.id);
+    if (existing && existing.status !== "in_progress") return false;
+    this.calls.set(call.id, call);
+    return true;
   }
 
   async listActions(companyId?: string, callId?: string): Promise<ScalyAction[]> {
@@ -335,6 +360,7 @@ export class InMemoryStore implements ScalyRepository {
       businessKnowledge: 0,
       ownerNotifications: 0,
       reviewRequests: 0,
+      gapRecovery: 0,
     };
 
     for (const [id, call] of [...this.calls]) {
@@ -378,6 +404,7 @@ export class InMemoryStore implements ScalyRepository {
     deleted.businessKnowledge = await getBusinessKnowledgeRepository().deleteByCompany(companyId);
     deleted.ownerNotifications = await getOwnerNotificationRepository().deleteByCompany(companyId);
     deleted.reviewRequests = await getReviewRequestRepository().deleteByCompany(companyId);
+    deleted.gapRecovery = await getGapRecoveryRepository().deleteByCompany(companyId);
 
     this.audit = this.audit.map((entry) => entry.companyId === companyId ? { ...entry, companyId: undefined } : entry);
     return { companyId, deleted };

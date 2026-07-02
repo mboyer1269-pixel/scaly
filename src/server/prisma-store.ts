@@ -155,6 +155,7 @@ export function callToDb(c: Call): Prisma.CallCreateManyInput {
     transcript: asJson(c.transcript),
     intelligence: c.intelligence ? asJson(c.intelligence) : Prisma.JsonNull,
     recordingUrl: c.recordingUrl,
+    provenance: c.provenance ? asJson(c.provenance) : Prisma.DbNull,
   };
 }
 
@@ -176,6 +177,7 @@ export function callFromDb(row: CallRow): Call {
     transcript: row.transcript as unknown as TranscriptTurn[],
     intelligence: (row.intelligence as unknown as CallIntelligence | null) ?? undefined,
     recordingUrl: null,
+    provenance: (row.provenance as unknown as Call["provenance"] | null) ?? undefined,
   };
 }
 
@@ -369,6 +371,13 @@ export class PrismaStore implements ScalyRepository {
     return row ? callFromDb(row) : undefined;
   }
 
+  async findCallByExternalId(companyId: string, externalId: string): Promise<Call | undefined> {
+    const row = await prisma.call.findFirst({
+      where: { companyId, provenance: { path: ["externalId"], equals: externalId } },
+    });
+    return row ? callFromDb(row) : undefined;
+  }
+
   async addCall(call: Call, actions: ScalyAction[]): Promise<void> {
     const data = callToDb(call);
     await prisma.$transaction([
@@ -383,6 +392,26 @@ export class PrismaStore implements ScalyRepository {
     const data = callToDb(call);
     await prisma.call.upsert({ where: { id: call.id }, create: data, update: data });
     return call;
+  }
+
+  async saveCallUnlessFinalized(call: Call): Promise<boolean> {
+    const data = callToDb(call);
+    const { id: _id, ...update } = data;
+    // Atomique côté SQL : l'UPDATE ne matche que si le statut est encore
+    // in_progress — impossible d'écraser un appel finalisé, même en course.
+    const updated = await prisma.call.updateMany({ where: { id: call.id, status: "in_progress" }, data: update });
+    if (updated.count > 0) return true;
+    const existing = await prisma.call.findUnique({ where: { id: call.id }, select: { id: true } });
+    if (existing) return false; // finalisé — le write s'efface
+    try {
+      await prisma.call.create({ data });
+      return true;
+    } catch {
+      // Course sur la création (contrainte d'unicité id) : on retente l'UPDATE
+      // conditionnel une fois ; s'il ne matche pas, un final a gagné.
+      const retry = await prisma.call.updateMany({ where: { id: call.id, status: "in_progress" }, data: update });
+      return retry.count > 0;
+    }
   }
 
   async listActions(companyId?: string, callId?: string): Promise<ScalyAction[]> {
@@ -581,6 +610,9 @@ export class PrismaStore implements ScalyRepository {
       businessKnowledge,
       ownerNotifications,
       reviewRequests,
+      recoveryOffers,
+      appointmentGaps,
+      waitlistEntries,
       _auditLog,
       company,
     ] = await prisma.$transaction([
@@ -596,6 +628,9 @@ export class PrismaStore implements ScalyRepository {
       prisma.businessKnowledgeItem.deleteMany({ where: { companyId } }),
       prisma.ownerNotification.deleteMany({ where: { companyId } }),
       prisma.reviewRequest.deleteMany({ where: { companyId } }),
+      prisma.recoveryOffer.deleteMany({ where: { companyId } }),
+      prisma.appointmentGap.deleteMany({ where: { companyId } }),
+      prisma.waitlistEntry.deleteMany({ where: { companyId } }),
       prisma.auditLog.updateMany({ where: { companyId }, data: { companyId: null } }),
       prisma.company.deleteMany({ where: { id: companyId } }),
     ]);
@@ -615,6 +650,7 @@ export class PrismaStore implements ScalyRepository {
         businessKnowledge: businessKnowledge.count,
         ownerNotifications: ownerNotifications.count,
         reviewRequests: reviewRequests.count,
+        gapRecovery: recoveryOffers.count + appointmentGaps.count + waitlistEntries.count,
       },
     };
   }

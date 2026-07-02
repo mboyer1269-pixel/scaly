@@ -9,6 +9,7 @@ import {
   Bot,
   BookOpen,
   Brain,
+  CalendarClock,
   LayoutDashboard,
   Lightbulb,
   Menu,
@@ -18,14 +19,19 @@ import {
   Rocket,
   Settings,
   Sparkles,
+  Target,
+  TrendingUp,
   X,
   Zap,
 } from "lucide-react";
 
 const NAV = [
   { href: "/dashboard", label: "Vue d'ensemble", icon: LayoutDashboard },
+  { href: "/opportunites", label: "Opportunités", icon: Target },
+  { href: "/roi", label: "Votre ROI", icon: TrendingUp },
   { href: "/calls", label: "Appels", icon: Phone },
   { href: "/follow-up", label: "À suivre", icon: Zap },
+  { href: "/annulations", label: "Annulations", icon: CalendarClock },
   { href: "/prepare", label: "Préparer Maude", icon: Sparkles },
   { href: "/knowledge", label: "Cerveau d'entreprise", icon: Brain },
   { href: "/learn", label: "À améliorer", icon: Lightbulb },

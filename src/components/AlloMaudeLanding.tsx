@@ -237,7 +237,7 @@ export function AlloMaudeLanding() {
               <Sparkles size={14} /> Marque pilote
             </p>
               <h2 className="mt-5 text-4xl font-black leading-[0.98] sm:text-5xl">
-              La marque parle Québec et Ontario. Le moteur reste Scaly.
+              La marque parle Québec et Ontario, d&rsquo;une seule voix.
             </h2>
             <p className="mt-5 text-base leading-7 text-[#5f554b]">
               Allô Maude garde un français québécois net, mais l’expérience doit passer à l’anglais

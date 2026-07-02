@@ -220,6 +220,37 @@ export const SEED_COMPANIES: Company[] = [
     planId: "pro",
     createdAt: "2026-06-01T00:00:00.000Z",
   },
+  // AJOUTÉ EN FIN DE LISTE : l'ordre détermine les seeds déterministes du golden set.
+  {
+    id: "comp_horizon",
+    name: "Auto Horizon",
+    businessDescription: "Concessionnaire automobile à Gatineau : ventes neuves et usagées, service, pièces et financement.",
+    industry: "concessionnaire_auto",
+    sectorLabel: "Concessionnaire — ventes et service",
+    ownerName: "Isabelle Fortin",
+    ownerEmail: "isabelle@autohorizon.example",
+    mainPhone: "819-555-8800",
+    twilioPhoneNumber: "819-555-8800",
+    transferPhone: "819-555-8801",
+    city: "Gatineau",
+    languages: ["fr", "en"],
+    defaultLanguage: "fr",
+    tone: "energique",
+    hours: { open: "08:00", close: "20:00", days: [1, 2, 3, 4, 5, 6] },
+    escalationRules: [
+      { id: "esc_horizon_1", description: "Intention d'achat chaude → vendeur immédiatement", trigger: { type: "keyword", value: "essai routier" }, action: "transfer_human", target: "819-555-8801" },
+      { id: "esc_horizon_2", description: "Demande d'humain → transfert direct", trigger: { type: "caller_request", value: "humain" }, action: "transfer_human", target: "819-555-8801" },
+    ],
+    essentialQuestions: ["Ventes, service, pièces ou financement ?", "Véhicule concerné ou recherché", "Nom et numéro de rappel", "Moment souhaité"],
+    services: ["Ventes neuves et usagées", "Service et entretien", "Pièces et accessoires", "Financement", "Évaluation d'échange"],
+    serviceAreas: ["Gatineau", "Outaouais", "Ottawa"],
+    policies: ["Disponibilité d'inventaire toujours confirmée par un membre de l'équipe", "Aucun taux de financement donné au téléphone"],
+    followUp: baseFollowUp,
+    coverage: { modes: [...baseCoverage.modes], overflowDelaySec: baseCoverage.overflowDelaySec },
+    compliance: baseCompliance,
+    planId: "pro",
+    createdAt: "2026-06-20T14:00:00.000Z",
+  },
 ];
 
 function agentFor(companyId: string, displayName: string, scriptId: string, persona: string): VoiceAgentConfig {
@@ -264,6 +295,7 @@ export const SEED_AGENTS: VoiceAgentConfig[] = [
   agentFor("comp_sourire", "Camille", "script_dentiste", "Douce et patiente. Rassure les patients anxieux."),
   agentFor("comp_drouin", "Maxime", "script_immobilier", "Professionnel et réactif. Sens de l'opportunité."),
   agentFor("comp_eclatnet", "Nadia", "script_nettoyage", "Souriante et méthodique."),
+  agentFor("comp_horizon", "Sophie", "script_concessionnaire", "Vive et structurée. Identifie le bon département en quelques secondes et ne laisse jamais un lead de vente refroidir."),
   {
     ...agentFor(
       "comp_maude",

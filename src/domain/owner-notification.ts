@@ -12,7 +12,8 @@ export type OwnerNotificationType =
   | "post_call_summary"
   | "unknown_answer"
   | "escalation"
-  | "follow_up_needed";
+  | "follow_up_needed"
+  | "gap_filled";
 
 export type OwnerNotificationStatus = "pending" | "sent" | "failed" | "dismissed";
 
@@ -38,6 +39,8 @@ export interface OwnerNotification {
   updatedAt: string;
   sentAt?: string;
   dismissedAt?: string;
+  /** Horodatage de réservation pour livraison (verrou anti double-envoi, repris si périmé). */
+  deliveryClaimedAt?: string;
   /** Identifiant retourné par le provider de livraison (ex. SID Twilio), si envoyé. */
   providerMessageId?: string;
   /** Raison d'échec de livraison, si le port a échoué. Jamais un secret. */

@@ -77,6 +77,7 @@ export interface OwnerNotificationRow {
   updatedAt: Date;
   sentAt: Date | null;
   dismissedAt: Date | null;
+  deliveryClaimedAt: Date | null;
   providerMessageId: string | null;
   failureReason: string | null;
 }
@@ -98,6 +99,7 @@ export function ownerNotificationFromDb(row: OwnerNotificationRow): OwnerNotific
     updatedAt: iso(row.updatedAt),
     sentAt: isoOpt(row.sentAt),
     dismissedAt: isoOpt(row.dismissedAt),
+    deliveryClaimedAt: isoOpt(row.deliveryClaimedAt),
     providerMessageId: row.providerMessageId ?? undefined,
     failureReason: row.failureReason ?? undefined,
   };
@@ -120,6 +122,7 @@ export function ownerNotificationToDb(item: OwnerNotification): OwnerNotificatio
     updatedAt: new Date(item.updatedAt),
     sentAt: dateOpt(item.sentAt),
     dismissedAt: dateOpt(item.dismissedAt),
+    deliveryClaimedAt: dateOpt(item.deliveryClaimedAt),
     providerMessageId: item.providerMessageId ?? null,
     failureReason: item.failureReason ?? null,
   };

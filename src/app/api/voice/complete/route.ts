@@ -10,9 +10,11 @@ import { getScriptById } from "@/data/industry-scripts";
 import { intelligenceEngine } from "@/services/intelligence";
 import { planActionsForCall } from "@/services/action-engine";
 import { consentFromCall } from "@/services/consent";
+import { captureWaitlistEntryFromCall } from "@/services/gap-recovery";
 import { createPostCallNotificationFromCall } from "@/services/post-call-notification";
 import { createReviewRequestFromCall, evaluateReviewEligibility } from "@/services/review-requests";
 import { isSmsConfigured, sendSms } from "@/adapters/integrations/twilio-sms";
+import { isCheckpointDraft } from "@/server/voice-fallback";
 import { newId } from "@/lib/format";
 import type { Call, TranscriptTurn } from "@/domain/call";
 import type { LanguageCode } from "@/domain/company";
@@ -60,10 +62,16 @@ export async function POST(req: Request) {
 
   // Idempotence : un retry Twilio réutilise le même callSid. Ne recrée ni appel,
   // ni notification, ni demande d'avis, ni audit — retourne l'appel existant.
+  // Exception : un brouillon checkpointé (pont encore en vie au moment du flush)
+  // n'est PAS un final — il est remplacé EN PLACE (même id, addCall upsert).
+  let draftId: string | undefined;
   if (body.callSid) {
-    const existing = (await store.listCalls(company.id)).find((c) => c.provenance?.externalId === body.callSid);
+    const existing = await store.findCallByExternalId(company.id, body.callSid);
     if (existing) {
-      return NextResponse.json({ callId: existing.id, actionsPlanned: 0, idempotent: true });
+      if (!isCheckpointDraft(existing)) {
+        return NextResponse.json({ callId: existing.id, actionsPlanned: 0, idempotent: true });
+      }
+      draftId = existing.id;
     }
   }
 
@@ -79,7 +87,7 @@ export async function POST(req: Request) {
   const measured = turns.map((t) => t.latency).filter((l): l is VoiceTurnLatency => Boolean(l && !l.simulated));
 
   const call: Call = {
-    id: newId("call"),
+    id: draftId ?? newId("call"),
     companyId: company.id,
     direction: "inbound",
     status: body.transferred ? "transferred" : "completed",
@@ -136,6 +144,15 @@ export async function POST(req: Request) {
     event: "appel_live_persisté",
     detail: `${call.id} (Twilio ${body.callSid ?? "?"}) · ${turns.length} tours · ${measured.length} latence(s) réelle(s)${measured.length ? ` · p. ex. ${measured[0].perceivedMs} ms` : ""}`,
   });
+
+  // Remplissage des annulations : « appelez-moi si une place se libère » devient
+  // une WaitlistEntry persistée — capability-driven (pack sans la capability →
+  // repli follow-up existant), best-effort, jamais bloquant.
+  try {
+    await captureWaitlistEntryFromCall(call, company);
+  } catch {
+    // L'entrée de liste d'attente est secondaire — l'appel reste persisté quoi qu'il arrive.
+  }
 
   // Pipeline post-appel (PR #25→#27) — best-effort, JAMAIS bloquant : ne touche
   // ni le transfert ni le fallback humain déjà exécutés plus haut.

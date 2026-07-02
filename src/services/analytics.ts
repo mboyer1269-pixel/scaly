@@ -32,7 +32,8 @@ export function computeDashboard(
   now = new Date(),
 ): DashboardData {
   const since = now.getTime() - periodDays * 24 * 3600 * 1000;
-  const inPeriod = calls.filter((c) => new Date(c.startedAt).getTime() >= since);
+  const finalCalls = calls.filter((c) => c.status !== "in_progress");
+  const inPeriod = finalCalls.filter((c) => new Date(c.startedAt).getTime() >= since);
   const baseline = getScriptByIndustry(company.industry).valueBaselineCad;
 
   const missedCalls = inPeriod.filter((c) => c.status === "missed");
@@ -135,7 +136,7 @@ export function buildInsights(company: Company, calls: Call[], baselineCad: numb
       id: "ins_sauves",
       kind: "tendance",
       title: `${saved.length} appel${saved.length > 1 ? "s" : ""} sauvé${saved.length > 1 ? "s" : ""} (hors heures ou rappel auto)`,
-      detail: `Sans Scaly, ces appels seraient probablement perdus. Valeur estimée protégée : ${formatCad(total)}.`,
+      detail: `Sans Allô Maude, ces appels seraient probablement perdus. Valeur estimée protégée : ${formatCad(total)}.`,
       impactCad: total,
       callIds: saved.map((c) => c.id),
     });

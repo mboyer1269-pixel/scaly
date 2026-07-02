@@ -1,5 +1,5 @@
 /**
- * Golden set — annotations HUMAINES des 53 appels seed (intention + urgence).
+ * Golden set — annotations HUMAINES des 65 appels seed (intention + urgence).
  * C'est le jeu d'évaluation des moteurs d'intelligence (ROADMAP P1, critère
  * de sortie : ≥ 90 % d'accord intention ET urgence).
  *
@@ -167,4 +167,32 @@ export const GOLDEN_ANNOTATIONS: GoldenAnnotation[] = [
   { key: "sim:comp_maude|script_domicile|persona_presse|303", expected: { intent: "demande_soumission", urgency: "haute" }, note: "Routine mais « le plus vite possible » exprimé — urgence de timing déclarée." },
   { key: "sim:comp_maude|script_domicile|persona_spam|304", expected: { intent: "spam", urgency: "basse" } },
   { key: "sim:comp_maude|script_domicile|persona_regulier|305", expected: { intent: "demande_soumission", urgency: "normale" } },
+
+  // ---------- Simulés — Auto Horizon (script_concessionnaire) ----------
+  {
+    key: "sim:comp_horizon|script_concessionnaire|persona_magasineur|320",
+    expected: { intent: "suivi_dossier", urgency: "normale" },
+    note: "Formule « je compare » mais la raison dominante est des nouvelles de sa voiture au service — statut de dossier, « d'ici un mois ».",
+  },
+  {
+    key: "sim:comp_horizon|script_concessionnaire|persona_regulier|321",
+    expected: { intent: "suivi_dossier", urgency: "normale" },
+    note: "« Où en est ma voiture au service » — l'appel statut classique en concession.",
+  },
+  {
+    key: "sim:comp_horizon|script_concessionnaire|persona_urgence|322",
+    expected: { intent: "urgence", urgency: "haute" },
+    note: "Rappel de sécurité constructeur, « aujourd'hui sans faute » — jour même, sans danger matériel actif.",
+  },
+  {
+    key: "sim:comp_horizon|script_concessionnaire|persona_presse|323",
+    expected: { intent: "question_info", urgency: "normale" },
+    note: "Heures du département des pièces — question d'information, impatience sans urgence métier.",
+  },
+  { key: "sim:comp_horizon|script_concessionnaire|persona_spam|324", expected: { intent: "spam", urgency: "basse" } },
+  {
+    key: "sim:comp_horizon|script_concessionnaire|persona_regulier|325",
+    expected: { intent: "prise_rdv", urgency: "normale" },
+    note: "Changement d'huile et pose de pneus — RDV atelier de routine.",
+  },
 ];
