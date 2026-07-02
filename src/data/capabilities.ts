@@ -34,6 +34,7 @@ export const APPOINTMENT_GAP_RECOVERY: CapabilityDefinition = {
     "appointment_gap.opened",
     "appointment_gap.filled",
     "appointment_gap.cancelled",
+    "appointment_gap.expired",
     "recovery_offer.prepared",
     "recovery_offer.sent",
     "recovery_offer.confirmed",

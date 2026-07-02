@@ -690,6 +690,122 @@ export async function cancelAppointmentGap(
 }
 
 /* ------------------------------------------------------------------ */
+/* Réponse entrante OUI/NON — la boucle se ferme par texto              */
+/* ------------------------------------------------------------------ */
+
+const YES_REPLY = /^\s*(oui|yes)(\s*(svp|s'il vous pla[îi]t|please))?\s*[!.]*\s*$/i;
+const NO_REPLY = /^\s*(non|no)(\s*(merci|thanks?|thank you))?\s*[!.]*\s*$/i;
+
+export function isOfferYesReply(body: string): boolean {
+  return YES_REPLY.test(body);
+}
+
+export function isOfferNoReply(body: string): boolean {
+  return NO_REPLY.test(body);
+}
+
+/** La plus récente offre ENVOYÉE de ce numéro (même tenant, entrée encore vivante). */
+export async function findActionableOfferForPhone(
+  companyId: string,
+  phone: string,
+  options?: EngineOptions,
+): Promise<RecoveryOffer | undefined> {
+  const { repo } = resolve(options);
+  const canon = canonicalPhone(phone);
+  const entries = await repo.listWaitlistEntries(companyId);
+  const mine = new Set(
+    entries.filter((e) => canonicalPhone(e.phone) === canon && e.status !== "cancelled").map((e) => e.id),
+  );
+  if (mine.size === 0) return undefined;
+  const offers = await repo.listOffers(companyId);
+  return offers
+    .filter((o) => o.status === "sent" && mine.has(o.waitlistEntryId))
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+}
+
+export interface OfferReplyResult {
+  handled: boolean;
+  /** Réponse SMS prête à retourner à la personne (FR, honnête, jamais de promesse). */
+  reply?: string;
+}
+
+/**
+ * Traite un texto entrant comme réponse à une offre : OUI → confirmée (plage
+ * comblée, offres sœurs annulées), NON → déclinée. Si la personne n'a aucune
+ * offre envoyée en attente, on ne touche à RIEN (handled: false) — le reste
+ * du pipeline SMS (STOP, propriétaire, tiers) garde la main.
+ */
+export async function handleOfferReply(
+  company: Company,
+  from: string,
+  body: string,
+  options?: EngineOptions,
+): Promise<OfferReplyResult> {
+  const yes = isOfferYesReply(body);
+  const no = isOfferNoReply(body);
+  if (!yes && !no) return { handled: false };
+
+  const offer = await findActionableOfferForPhone(company.id, from, options);
+  if (!offer) return { handled: false };
+
+  if (yes) {
+    await confirmRecoveryOffer(company.id, offer.id, options);
+    return {
+      handled: true,
+      reply: `Parfait, c'est noté ! L'équipe de ${company.name} vous confirme la plage rapidement. Si vous changez d'idée, répondez NON ou appelez-nous.`,
+    };
+  }
+  await declineRecoveryOffer(company.id, offer.id, options);
+  return {
+    handled: true,
+    reply: `C'est noté, merci d'avoir répondu ! Vous restez sur la liste — on vous fera signe si une autre plage se libère. Répondez STOP pour ne plus recevoir ces alertes.`,
+  };
+}
+
+/* ------------------------------------------------------------------ */
+/* Expiration — une offre sans réponse ne vit pas éternellement         */
+/* ------------------------------------------------------------------ */
+
+/** Durée de vie par défaut d'une offre/plage sans réponse ni confirmation. */
+export const OFFER_TTL_HOURS = 48;
+
+export interface ExpireResult {
+  offersExpired: number;
+  gapsExpired: number;
+}
+
+/**
+ * Expire les offres (prepared/sent) et les plages (open/offered) plus vieilles
+ * que le TTL. Idempotent et sans surprise : expired est terminal, l'audit trace
+ * chaque expiration, et une plage expirée ne crée plus jamais d'offre.
+ */
+export async function expireStaleGapRecovery(
+  company: Company,
+  ttlHours = OFFER_TTL_HOURS,
+  options?: EngineOptions,
+): Promise<ExpireResult> {
+  const { repo, audit, now } = resolve(options);
+  const cutoff = new Date(now.getTime() - ttlHours * 3600 * 1000).toISOString();
+  const result: ExpireResult = { offersExpired: 0, gapsExpired: 0 };
+
+  for (const offer of await repo.listOffers(company.id)) {
+    if ((offer.status === "prepared" || offer.status === "sent") && offer.createdAt < cutoff) {
+      await repo.saveOffer(transitionOffer(offer, "expired", now));
+      await audit.record({ event: "recovery_offer.expired", companyId: company.id, detail: `${offer.id} · sans réponse après ${ttlHours} h` });
+      result.offersExpired += 1;
+    }
+  }
+  for (const gap of await repo.listGaps(company.id)) {
+    if ((gap.status === "open" || gap.status === "offered") && gap.createdAt < cutoff) {
+      await repo.saveGap({ ...gap, status: "expired", updatedAt: now.toISOString() });
+      await audit.record({ event: "appointment_gap.expired", companyId: company.id, detail: `${gap.id} · ${gap.humanLabel}` });
+      result.gapsExpired += 1;
+    }
+  }
+  return result;
+}
+
+/* ------------------------------------------------------------------ */
 /* Phase 8 (suite) — Envoi consenti par port injectable                 */
 /* ------------------------------------------------------------------ */
 

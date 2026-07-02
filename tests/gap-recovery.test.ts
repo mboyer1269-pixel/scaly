@@ -17,6 +17,7 @@ import { SEED_COMPANIES } from "@/data/companies";
 import {
   GapRecoveryError,
   InMemoryGapRecoveryRepository,
+  OFFER_TTL_HOURS,
   buildOfferMessage,
   cancelAppointmentGap,
   cancelRecoveryOffer,
@@ -25,6 +26,11 @@ import {
   confirmRecoveryOffer,
   declineRecoveryOffer,
   detectWaitlistIntent,
+  expireStaleGapRecovery,
+  findActionableOfferForPhone,
+  handleOfferReply,
+  isOfferNoReply,
+  isOfferYesReply,
   matchWaitlistCandidates,
   openAppointmentGap,
   prepareOffersForGap,
@@ -494,6 +500,127 @@ describe("envoi consenti — le consent gate est FINAL au moment de l'envoi", ()
     expect(result.sent).toHaveLength(0);
     expect((await repo.listOffers(DENTAL.id))[0].status).toBe("failed");
     expect(audits.map((a) => a.event)).toContain("recovery_offer.failed");
+  });
+});
+
+describe("réponse entrante OUI/NON — la boucle se ferme par texto", () => {
+  async function sentOffer(options: ReturnType<typeof engine>["options"], repo: InMemoryGapRecoveryRepository) {
+    const e = await repo.saveWaitlistEntry(entry());
+    await openedGap(options, { serviceCategory: undefined });
+    const sentTo: { to: string; body: string }[] = [];
+    await sendPreparedOffers(DENTAL, [activeConsent(e.phone)], {
+      send: async (to, body) => { sentTo.push({ to, body }); return { deliveryId: "SM1" }; },
+    }, options);
+    return e;
+  }
+
+  it("reconnaît OUI/NON avec variantes et rejette le reste", () => {
+    for (const yes of ["OUI", "oui", " Oui ! ", "yes", "Oui svp"]) expect(isOfferYesReply(yes), yes).toBe(true);
+    for (const no of ["NON", "non merci", "No thanks"]) expect(isOfferNoReply(no), no).toBe(true);
+    for (const neither of ["peut-être", "OUI mais jeudi seulement", "STOP", "CHAUDS"]) {
+      expect(isOfferYesReply(neither), neither).toBe(false);
+      expect(isOfferNoReply(neither), neither).toBe(false);
+    }
+  });
+
+  it("OUI → offre confirmée, plage comblée, réponse SMS qui identifie l'entreprise sans rien promettre d'autre", async () => {
+    const { options, repo } = engine();
+    const e = await sentOffer(options, repo);
+    const result = await handleOfferReply(DENTAL, e.phone, "OUI", options);
+    expect(result.handled).toBe(true);
+    expect(result.reply).toContain(DENTAL.name);
+    expect((await repo.listOffers(DENTAL.id))[0].status).toBe("confirmed");
+    expect((await repo.listGaps(DENTAL.id))[0].status).toBe("filled");
+  });
+
+  it("NON → offre déclinée, la personne RESTE sur la liste, la réponse offre STOP", async () => {
+    const { options, repo } = engine();
+    const e = await sentOffer(options, repo);
+    const result = await handleOfferReply(DENTAL, e.phone, "non merci", options);
+    expect(result.handled).toBe(true);
+    expect(result.reply).toMatch(/STOP/);
+    expect((await repo.listOffers(DENTAL.id))[0].status).toBe("declined");
+    expect((await repo.getWaitlistEntry(e.id))?.status).toBe("contacted"); // toujours joignable
+  });
+
+  it("sans offre envoyée pour ce numéro → handled: false, le pipeline SMS garde la main", async () => {
+    const { options } = engine();
+    expect((await handleOfferReply(DENTAL, "819-555-9999", "OUI", options)).handled).toBe(false);
+    expect((await handleOfferReply(DENTAL, "819-555-9999", "bonjour", options)).handled).toBe(false);
+  });
+
+  it("le tenant B ne peut pas répondre à une offre du tenant A", async () => {
+    const { options, repo } = engine();
+    const e = await sentOffer(options, repo);
+    expect(await findActionableOfferForPhone(AUTO.id, e.phone, options)).toBeUndefined();
+    expect((await handleOfferReply(AUTO, e.phone, "OUI", options)).handled).toBe(false);
+  });
+
+  it("bout en bout /api/sms/incoming : un OUI entrant confirme l'offre et répond gentiment", async () => {
+    const g = globalThis as { __scalyStore?: unknown; __scalyGapRecovery?: unknown };
+    const prevStore = g.__scalyStore;
+    const prevRepo = g.__scalyGapRecovery;
+    const prevToken = process.env.TWILIO_AUTH_TOKEN;
+    try {
+      delete process.env.TWILIO_AUTH_TOKEN; // pas de signature en test — le contrat signature a ses propres tests
+      const { InMemoryStore } = await import("@/server/store");
+      const store = new InMemoryStore();
+      await store.updateCompany(DENTAL.id, { twilioPhoneNumber: "+15145550042" });
+      g.__scalyStore = store;
+      const repo = new InMemoryGapRecoveryRepository();
+      g.__scalyGapRecovery = repo;
+
+      const e = await repo.saveWaitlistEntry(entry());
+      await openAppointmentGap({ companyId: DENTAL.id, humanLabel: "jeudi 14 h" }, DENTAL, { repo, audit: { record: async () => {} }, now: NOW });
+      await sendPreparedOffers(DENTAL, [activeConsent(e.phone)], { send: async () => ({ deliveryId: "SM1" }) }, { repo, audit: { record: async () => {} }, now: NOW });
+
+      const { POST } = await import("@/app/api/sms/incoming/route");
+      const form = new URLSearchParams({ From: "+18195552345", To: "+15145550042", Body: "OUI" });
+      const res = await POST(new Request("https://scaly.test/api/sms/incoming", {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: form.toString(),
+      }));
+      const xml = await res.text();
+      expect(res.status).toBe(200);
+      expect(xml).toContain(DENTAL.name);
+      expect((await repo.listOffers(DENTAL.id))[0].status).toBe("confirmed");
+    } finally {
+      if (prevToken === undefined) delete process.env.TWILIO_AUTH_TOKEN; else process.env.TWILIO_AUTH_TOKEN = prevToken;
+      if (prevStore === undefined) delete g.__scalyStore; else g.__scalyStore = prevStore;
+      if (prevRepo === undefined) delete g.__scalyGapRecovery; else g.__scalyGapRecovery = prevRepo;
+    }
+  });
+});
+
+describe("expiration — une offre sans réponse ne vit pas éternellement", () => {
+  it("offres prepared/sent et plages open/offered plus vieilles que le TTL → expired + audit", async () => {
+    const { options, repo, audits } = engine();
+    await repo.saveWaitlistEntry(entry());
+    const { gap, offers } = await openedGap(options, { serviceCategory: undefined });
+    expect(offers).toHaveLength(1);
+
+    const later = new Date(NOW.getTime() + (OFFER_TTL_HOURS + 1) * 3600 * 1000);
+    const result = await expireStaleGapRecovery(DENTAL, OFFER_TTL_HOURS, { ...options, now: later });
+    expect(result).toEqual({ offersExpired: 1, gapsExpired: 1 });
+    expect((await repo.listOffers(DENTAL.id))[0].status).toBe("expired");
+    expect((await repo.getGap(gap.id))?.status).toBe("expired");
+    expect(audits.map((a) => a.event)).toEqual(expect.arrayContaining(["recovery_offer.expired", "appointment_gap.expired"]));
+  });
+
+  it("les offres fraîches et les statuts terminaux (filled, confirmed) ne bougent pas ; repasser est un no-op", async () => {
+    const { options, repo } = engine();
+    await repo.saveWaitlistEntry(entry());
+    const { gap, offers } = await openedGap(options, { serviceCategory: undefined });
+    await confirmRecoveryOffer(DENTAL.id, offers[0].id, options);
+
+    const later = new Date(NOW.getTime() + (OFFER_TTL_HOURS + 1) * 3600 * 1000);
+    const first = await expireStaleGapRecovery(DENTAL, OFFER_TTL_HOURS, { ...options, now: later });
+    expect(first).toEqual({ offersExpired: 0, gapsExpired: 0 }); // confirmed + filled = intouchables
+    expect((await repo.getGap(gap.id))?.status).toBe("filled");
+
+    const fresh = await expireStaleGapRecovery(DENTAL, OFFER_TTL_HOURS, options); // à NOW, rien n'est vieux
+    expect(fresh).toEqual({ offersExpired: 0, gapsExpired: 0 });
   });
 });
 
