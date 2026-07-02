@@ -14,6 +14,7 @@
  */
 import type { Industry } from "./company";
 import type { Intent } from "./call";
+import type { CapabilityId } from "./capability";
 
 /** Intention d'appel fréquente pour ce métier, avec un exemple entendu au téléphone. */
 export interface PackCallIntent {
@@ -77,6 +78,16 @@ export interface KnowledgeSourceRef {
   status: "a_venir";
 }
 
+/**
+ * Catégorie de service du métier — taxonomie GÉNÉRIQUE utilisée par les
+ * capabilities (ex. matcher une plage libérée « nettoyage » avec les candidats
+ * qui attendent un nettoyage). L'id est stable et neutre ; le label est FR client.
+ */
+export interface PackServiceCategory {
+  id: string;
+  label: string;
+}
+
 export interface IndustryPack {
   id: string;
   industry: Industry;
@@ -94,4 +105,11 @@ export interface IndustryPack {
   addOns: PackAddOn[];
   cancellation: CancellationRescuePolicy;
   knowledgeSources: KnowledgeSourceRef[];
+  /**
+   * Capabilities produit ACTIVÉES pour ce métier. Le pack déclare le contexte,
+   * le moteur (src/services) exécute — jamais de logique métier ici.
+   */
+  capabilities: CapabilityId[];
+  /** Taxonomie des services du métier — consommée par les capabilities. */
+  serviceCategories: PackServiceCategory[];
 }

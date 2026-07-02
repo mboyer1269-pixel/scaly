@@ -4,6 +4,8 @@ export * from "./action";
 export * from "./agent";
 export * from "./script";
 export * from "./pack";
+export * from "./capability";
+export * from "./gap-recovery";
 export * from "./persona";
 export * from "./billing";
 export * from "./analytics";

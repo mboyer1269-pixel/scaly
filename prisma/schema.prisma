@@ -56,6 +56,9 @@ model Company {
   businessKnowledge BusinessKnowledgeItem[]
   ownerNotifications OwnerNotification[]
   reviewRequests ReviewRequest[]
+  waitlistEntries WaitlistEntry[]
+  appointmentGaps AppointmentGap[]
+  recoveryOffers RecoveryOffer[]
 }
 
 // Coffre de consentements (ADR-018) — par personne, opposable, révocable.
@@ -271,6 +274,88 @@ model OwnerNotification {
   company Company @relation(fields: [companyId], references: [id])
 
   @@index([companyId, status])
+}
+
+// ============================================================================
+// Remplissage intelligent des annulations (capability appointment_gap_recovery).
+// Trois objets GÉNÉRIQUES — le contexte métier vit dans les Industry Packs.
+// ============================================================================
+
+// « Appelez-moi si une place se libère » — capté en appel, consentement connu.
+model WaitlistEntry {
+  id                     String   @id
+  companyId              String
+  industryPackId         String?
+  capabilityId           String   // appointment_gap_recovery
+  callerName             String?
+  phone                  String
+  sourceCallId           String?
+  desiredServiceCategory String?
+  desiredServiceLabel    String?
+  preferredTimeWindow    String?
+  urgency                String?  // critique | haute | normale | basse
+  channelPreference      String   // sms | call | unknown
+  consentToSms           String   // yes | no | unknown
+  status                 String   // active | contacted | confirmed | cancelled | expired
+  notes                  String?
+  createdAt              DateTime
+  updatedAt              DateTime
+  cancelledAt            DateTime?
+  cancelReason           String?
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@index([companyId, status])
+}
+
+// Une plage libérée — sans calendrier complet, le libellé humain fait foi.
+model AppointmentGap {
+  id              String   @id
+  companyId       String
+  industryPackId  String?
+  capabilityId    String   // appointment_gap_recovery
+  serviceCategory String?
+  serviceLabel    String?
+  startsAt        DateTime?
+  endsAt          DateTime?
+  humanLabel      String
+  source          String   // manual | system | call
+  status          String   // open | offered | filled | cancelled | expired
+  idempotencyKey  String?
+  createdAt       DateTime
+  updatedAt       DateTime
+  cancelledAt     DateTime?
+  cancelReason    String?
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, status])
+}
+
+// La relance prudente qui relie plage et candidat — idempotente par (gap, entrée).
+model RecoveryOffer {
+  id              String   @id
+  companyId       String
+  gapId           String
+  waitlistEntryId String
+  channel         String   // sms | call | action_only
+  status          String   // prepared | sent | confirmed | declined | cancelled | expired | failed
+  messagePreview  String
+  deliveryId      String?
+  idempotencyKey  String
+  createdAt       DateTime
+  updatedAt       DateTime
+  sentAt          DateTime?
+  confirmedAt     DateTime?
+  cancelledAt     DateTime?
+  cancelReason    String?
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, idempotencyKey])
+  @@index([companyId, status])
+  @@index([companyId, gapId])
 }
 
 // Demande d'avis (PR #27) — preuve sociale mesurable, permission-aware.

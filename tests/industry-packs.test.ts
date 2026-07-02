@@ -1,18 +1,21 @@
 /**
- * Industry Packs — profils métiers : les 3 packs initiaux (concessionnaire,
- * dentaire, PME générale), repli sans crash, prudence, relance annulation,
+ * Industry Packs — profils métiers : 4 packs (concessionnaire, dentaire,
+ * clinique privée/esthétique, PME générale), repli sans crash, prudence,
+ * relance annulation, contrat de shape PARTAGÉ (capabilities, taxonomie),
  * injection dans le prompt temps réel SANS toucher aux industries sans pack.
  */
 import { describe, expect, it } from "vitest";
 import {
   GENERAL_PACK,
   INDUSTRY_PACKS,
+  PACK_CLINIQUE_PRIVEE,
   PACK_CONCESSIONNAIRE,
   PACK_DENTAIRE,
   PACK_PME,
   findIndustryPack,
   getIndustryPack,
 } from "@/data/industry-packs";
+import { findCapability } from "@/data/capabilities";
 import { getScriptById, getScriptByIndustry } from "@/data/industry-scripts";
 import { SEED_AGENTS, SEED_COMPANIES } from "@/data/companies";
 import { INDUSTRY_LABELS } from "@/domain/company";
@@ -28,10 +31,16 @@ function promptFor(companyId: string): string {
 }
 
 describe("Industry Packs — structure", () => {
-  it("expose les 3 packs initiaux : concessionnaire, dentaire, PME générale", () => {
-    expect(INDUSTRY_PACKS.map((p) => p.id)).toEqual(["pack_concessionnaire", "pack_dentaire", "pack_pme"]);
+  it("expose les 4 packs : concessionnaire, dentaire, clinique privée, PME générale", () => {
+    expect(INDUSTRY_PACKS.map((p) => p.id)).toEqual([
+      "pack_concessionnaire",
+      "pack_dentaire",
+      "pack_clinique_privee",
+      "pack_pme",
+    ]);
     expect(PACK_CONCESSIONNAIRE.industry).toBe("concessionnaire_auto");
     expect(PACK_DENTAIRE.industry).toBe("dentiste");
+    expect(PACK_CLINIQUE_PRIVEE.industry).toBe("clinique_privee");
     expect(PACK_PME.industry).toBe("services_professionnels");
   });
 
@@ -47,6 +56,27 @@ describe("Industry Packs — structure", () => {
       for (const intent of pack.frequentIntents) {
         expect(intent.label, pack.id).toBeTruthy();
         expect(intent.example, pack.id).toBeTruthy();
+      }
+    }
+  });
+
+  it("les packs partagent le MÊME contrat de shape — pas d'objets différents selon le métier", () => {
+    const referenceKeys = Object.keys(PACK_PME).sort();
+    for (const pack of INDUSTRY_PACKS) {
+      expect(Object.keys(pack).sort(), pack.id).toEqual(referenceKeys);
+    }
+  });
+
+  it("chaque pack déclare ses capabilities (résolues au registre) et sa taxonomie de services", () => {
+    for (const pack of INDUSTRY_PACKS) {
+      expect(pack.capabilities, pack.id).toContain("appointment_gap_recovery");
+      for (const id of pack.capabilities) expect(findCapability(id), `${pack.id} → ${id}`).toBeDefined();
+      expect(pack.serviceCategories.length, pack.id).toBeGreaterThanOrEqual(4);
+      const ids = pack.serviceCategories.map((c) => c.id);
+      expect(new Set(ids).size, pack.id).toBe(ids.length); // ids uniques
+      for (const cat of pack.serviceCategories) {
+        expect(cat.id, pack.id).toMatch(/^[a-z_]+$/); // id stable et neutre
+        expect(cat.label, pack.id).toBeTruthy();
       }
     }
   });

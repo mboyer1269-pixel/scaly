@@ -10,6 +10,7 @@ import { getScriptById } from "@/data/industry-scripts";
 import { intelligenceEngine } from "@/services/intelligence";
 import { planActionsForCall } from "@/services/action-engine";
 import { consentFromCall } from "@/services/consent";
+import { captureWaitlistEntryFromCall } from "@/services/gap-recovery";
 import { createPostCallNotificationFromCall } from "@/services/post-call-notification";
 import { createReviewRequestFromCall, evaluateReviewEligibility } from "@/services/review-requests";
 import { isSmsConfigured, sendSms } from "@/adapters/integrations/twilio-sms";
@@ -143,6 +144,15 @@ export async function POST(req: Request) {
     event: "appel_live_persisté",
     detail: `${call.id} (Twilio ${body.callSid ?? "?"}) · ${turns.length} tours · ${measured.length} latence(s) réelle(s)${measured.length ? ` · p. ex. ${measured[0].perceivedMs} ms` : ""}`,
   });
+
+  // Remplissage des annulations : « appelez-moi si une place se libère » devient
+  // une WaitlistEntry persistée — capability-driven (pack sans la capability →
+  // repli follow-up existant), best-effort, jamais bloquant.
+  try {
+    await captureWaitlistEntryFromCall(call, company);
+  } catch {
+    // L'entrée de liste d'attente est secondaire — l'appel reste persisté quoi qu'il arrive.
+  }
 
   // Pipeline post-appel (PR #25→#27) — best-effort, JAMAIS bloquant : ne touche
   // ni le transfert ni le fallback humain déjà exécutés plus haut.

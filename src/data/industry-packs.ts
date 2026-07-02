@@ -67,6 +67,7 @@ export const PACK_CONCESSIONNAIRE: IndustryPack = {
   ],
   addOns: [
     ...CORE_ADDONS,
+    { id: "addon_relance_annulation", name: "Remplissage intelligent des annulations", description: "Quand une plage au service se libère, Maude relance les clients en attente consentants — offres préparées et auditées, envoi SMS quand Twilio est branché.", status: "inclus" },
     { id: "addon_inventaire", name: "Connexion à l'inventaire", description: "Maude répond à « est-ce encore disponible ? » depuis votre inventaire réel (site web ou flux).", status: "a_venir" },
     { id: "addon_statut_service", name: "Statut de réparation proactif", description: "SMS de statut automatique — jusqu'à 75 % des appels d'après-midi sont des « où est ma voiture ? » selon les études de l'industrie.", status: "a_venir" },
   ],
@@ -81,6 +82,17 @@ export const PACK_CONCESSIONNAIRE: IndustryPack = {
   knowledgeSources: [
     { kind: "inventory", label: "Inventaire véhicules (site ou flux)", status: "a_venir" },
     { kind: "website", label: "Site du concessionnaire (heures, promotions)", status: "a_venir" },
+  ],
+  capabilities: ["appointment_gap_recovery"],
+  serviceCategories: [
+    { id: "service", label: "Rendez-vous au service" },
+    { id: "tires", label: "Pneus" },
+    { id: "oil_change", label: "Changement d'huile" },
+    { id: "brakes", label: "Freins" },
+    { id: "sales", label: "Ventes" },
+    { id: "financing", label: "Financement" },
+    { id: "trade_in", label: "Échange / fin de location" },
+    { id: "parts", label: "Pièces et accessoires" },
   ],
 };
 
@@ -121,7 +133,7 @@ export const PACK_DENTAIRE: IndustryPack = {
   ],
   addOns: [
     ...CORE_ADDONS,
-    { id: "addon_relance_annulation", name: "Relance annulation automatique", description: "Quand une plage se libère, les patients de la liste de relance reçoivent un SMS « premier arrivé, premier servi ». Les études de l'industrie estiment qu'une liste automatisée comble 40-60 % des annulations, contre 10-20 % à la main.", status: "a_venir" },
+    { id: "addon_relance_annulation", name: "Remplissage intelligent des annulations", description: "Quand une plage se libère, les patients consentants de la liste de relance reçoivent une offre « premier arrivé, premier servi » — préparée et auditée, envoi SMS quand Twilio est branché. Les études de l'industrie estiment qu'une liste automatisée comble 40-60 % des annulations, contre 10-20 % à la main.", status: "inclus" },
     { id: "addon_rappels_rdv", name: "Rappels de rendez-vous", description: "Rappel SMS avant le rendez-vous pour réduire les absences.", status: "a_venir" },
   ],
   cancellation: {
@@ -138,6 +150,15 @@ export const PACK_DENTAIRE: IndustryPack = {
   knowledgeSources: [
     { kind: "faq", label: "FAQ de la clinique (assurances, politiques)", status: "a_venir" },
     { kind: "website", label: "Site de la clinique (équipe, services)", status: "a_venir" },
+  ],
+  capabilities: ["appointment_gap_recovery"],
+  serviceCategories: [
+    { id: "cleaning", label: "Nettoyage" },
+    { id: "emergency", label: "Urgence dentaire" },
+    { id: "new_patient", label: "Nouveau patient" },
+    { id: "consultation", label: "Consultation" },
+    { id: "follow_up", label: "Suivi de traitement" },
+    { id: "cancellation_or_reschedule", label: "Annulation ou déplacement" },
   ],
 };
 
@@ -172,7 +193,7 @@ export const PACK_PME: IndustryPack = {
   ],
   addOns: [
     ...CORE_ADDONS,
-    { id: "addon_relance_annulation", name: "Relance annulation automatique", description: "Quand un rendez-vous s'annule, les clients en attente reçoivent un SMS pour combler la plage.", status: "a_venir" },
+    { id: "addon_relance_annulation", name: "Remplissage intelligent des annulations", description: "Quand un rendez-vous s'annule, les clients en attente consentants reçoivent une offre pour combler la plage — préparée et auditée, envoi SMS quand Twilio est branché.", status: "inclus" },
   ],
   cancellation: {
     enabled: true,
@@ -186,9 +207,81 @@ export const PACK_PME: IndustryPack = {
     { kind: "website", label: "Site de l'entreprise (services, équipe)", status: "a_venir" },
     { kind: "documents", label: "Documents internes (politiques, grilles)", status: "a_venir" },
   ],
+  capabilities: ["appointment_gap_recovery"],
+  serviceCategories: [
+    { id: "estimate", label: "Soumission" },
+    { id: "consultation", label: "Consultation" },
+    { id: "service_call", label: "Appel de service" },
+    { id: "callback", label: "Rappel demandé" },
+    { id: "cancellation_or_reschedule", label: "Annulation ou déplacement" },
+  ],
 };
 
-export const INDUSTRY_PACKS: IndustryPack[] = [PACK_CONCESSIONNAIRE, PACK_DENTAIRE, PACK_PME];
+export const PACK_CLINIQUE_PRIVEE: IndustryPack = {
+  id: "pack_clinique_privee",
+  industry: "clinique_privee",
+  scriptId: "script_clinique",
+  name: "Clinique privée et esthétique",
+  shortDescription:
+    "Consultations, traitements et suivis — sans jamais donner d'avis médical. Chaque plage annulée est offerte aux patients en attente consentants, au lieu de rester vide.",
+  frequentIntents: [
+    { intent: "prise_rdv", label: "Consultation initiale", example: "J'aimerais une consultation pour un traitement." },
+    { intent: "prise_rdv", label: "Prise ou déplacement de rendez-vous", example: "Est-ce que je peux devancer mon rendez-vous de suivi ?" },
+    { intent: "annulation", label: "Annulation de rendez-vous", example: "Je dois annuler mon traitement de vendredi." },
+    { intent: "question_info", label: "Tarifs et déroulement d'un traitement", example: "Combien coûte une séance et combien de temps ça dure ?" },
+    { intent: "urgence", label: "Demande urgente (réaction, douleur post-traitement)", example: "J'ai une réaction depuis mon traitement d'hier." },
+  ],
+  teamRoles: ["Coordonnatrice / réception", "Infirmière ou technicienne", "Professionnel traitant", "Responsable facturation"],
+  transferRouting: [
+    { department: "Urgences cliniques", triggers: ["réaction", "douleur", "enflure", "saigne"], description: "Toute réaction ou douleur post-traitement → personnel clinique immédiatement, ou consigne d'urgence selon la gravité." },
+    { department: "Personnel clinique", triggers: ["symptôme", "traitement", "contre-indication", "médicament"], description: "Toute question clinique → professionnel traitant. Jamais d'avis médical par l'IA." },
+    { department: "Facturation", triggers: ["prix", "facture", "financement", "forfait"], description: "Tarifs exacts et forfaits → responsable facturation ; Maude donne seulement l'information publique." },
+  ],
+  cautionPhrases: [
+    "Je ne donne jamais de diagnostic ni d'avis médical — je peux par contre vous mettre en contact avec l'équipe clinique.",
+    "Si votre réaction vous inquiète sérieusement, contactez votre médecin ou les services d'urgence — je transmets aussi le message à la clinique immédiatement.",
+    "Selon les informations disponibles, je fais confirmer les tarifs et la durée exacte par l'équipe.",
+  ],
+  sampleAnswers: [
+    {
+      caller: "J'ai une rougeur depuis mon traitement d'hier, c'est normal ?",
+      maude: "Je comprends que ça vous inquiète. Je ne peux pas vous dire si c'est normal — je ne donne pas d'avis médical — mais je transmets votre message au personnel clinique tout de suite pour qu'on vous rappelle en priorité. Si ça s'aggrave, n'attendez pas : appelez votre médecin ou l'urgence.",
+    },
+    {
+      caller: "Je dois annuler ma séance de vendredi.",
+      maude: "Pas de souci ! Avant d'annuler, je peux vous replacer tout de suite — ça vous éviterait de rappeler. Sinon j'annule, et la plage sera offerte à une personne qui attend.",
+    },
+  ],
+  addOns: [
+    ...CORE_ADDONS,
+    { id: "addon_relance_annulation", name: "Remplissage intelligent des annulations", description: "Quand une plage se libère, les patients en attente consentants reçoivent une offre « premier arrivé, premier servi » — préparée et auditée, envoi SMS quand Twilio est branché.", status: "inclus" },
+  ],
+  cancellation: {
+    enabled: true,
+    offerReschedule: true,
+    offerRecallList: true,
+    freedSlotSmsTemplate:
+      "Bonjour {name}, une plage vient de se libérer chez {company} le {slot}. Répondez OUI si vous voulez qu'on vérifie si elle peut vous être réservée, ou NON pour ignorer. Répondez STOP pour ne plus recevoir ces alertes.",
+    promptRules: [
+      ...CANCELLATION_RULES_BASE,
+      "Si l'annulation concerne un suivi post-traitement, rappelle doucement que la clinique recommande de ne pas trop l'espacer — sans dramatiser ni donner d'avis médical.",
+    ],
+  },
+  knowledgeSources: [
+    { kind: "faq", label: "FAQ de la clinique (tarifs publics, préparation aux traitements)", status: "a_venir" },
+    { kind: "website", label: "Site de la clinique (équipe, soins offerts)", status: "a_venir" },
+  ],
+  capabilities: ["appointment_gap_recovery"],
+  serviceCategories: [
+    { id: "consultation", label: "Consultation" },
+    { id: "treatment", label: "Traitement" },
+    { id: "follow_up", label: "Suivi post-traitement" },
+    { id: "cancellation_or_reschedule", label: "Annulation ou déplacement" },
+    { id: "urgent_request", label: "Demande urgente" },
+  ],
+};
+
+export const INDUSTRY_PACKS: IndustryPack[] = [PACK_CONCESSIONNAIRE, PACK_DENTAIRE, PACK_CLINIQUE_PRIVEE, PACK_PME];
 
 /** Pack de repli : PME générale. Toute industrie sans pack dédié tombe ici — jamais de crash. */
 export const GENERAL_PACK = PACK_PME;
