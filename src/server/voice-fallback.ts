@@ -7,6 +7,8 @@ import { getStore } from "@/server/store";
 import { getScriptById } from "@/data/industry-scripts";
 import { intelligenceEngine } from "@/services/intelligence";
 import { planActionsForCall } from "@/services/action-engine";
+import { tryAppendRuntimeEvent } from "@/services/event-outbox";
+import { redactPhone } from "@/domain/runtime-event";
 import { newId } from "@/lib/format";
 import type { Call, TranscriptTurn } from "@/domain/call";
 import type { Company } from "@/domain/company";
@@ -104,5 +106,24 @@ export async function persistFallbackCall(opts: {
     actor: "twilio",
     event: "appel_live_repli_persisté",
     detail: `${call.id} · Twilio ${opts.callSid || "?"} · transfert vers humain${draft ? ` · ${draft.transcript.length} tour(s) checkpointé(s) préservé(s)` : ""}`,
+  });
+
+  // Frontière (ADR-020) : le repli humain produit le MÊME événement terminal
+  // que le chemin realtime transféré. Émis APRÈS le garde d'idempotence
+  // (early return plus haut) — un retry Twilio ne double jamais l'événement.
+  const correlationId = opts.callSid && opts.callSid !== "inconnu" ? opts.callSid : call.id;
+  await tryAppendRuntimeEvent({
+    companyId: opts.company.id,
+    type: "call.transferred",
+    correlationId,
+    externalId: opts.callSid !== "inconnu" ? opts.callSid : undefined,
+    payload: {
+      transcriptRef: call.id,
+      phone: redactPhone(call.fromNumber),
+      engine: "human_fallback",
+      transferReason: opts.transferReason ?? "Repli humain Twilio: service realtime absent.",
+      checkpointTurnsPreserved: draft ? draft.transcript.length : 0,
+      summary: call.intelligence?.summary ?? null,
+    },
   });
 }

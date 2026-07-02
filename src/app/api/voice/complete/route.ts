@@ -15,6 +15,9 @@ import { createPostCallNotificationFromCall } from "@/services/post-call-notific
 import { createReviewRequestFromCall, evaluateReviewEligibility } from "@/services/review-requests";
 import { isSmsConfigured, sendSms } from "@/adapters/integrations/twilio-sms";
 import { isCheckpointDraft } from "@/server/voice-fallback";
+import { tryAppendRuntimeEvent } from "@/services/event-outbox";
+import { redactPhone } from "@/domain/runtime-event";
+import { callOpportunitySignal } from "@/services/opportunities";
 import { newId } from "@/lib/format";
 import type { Call, TranscriptTurn } from "@/domain/call";
 import type { LanguageCode } from "@/domain/company";
@@ -126,6 +129,48 @@ export async function POST(req: Request) {
     }
   }
 
+  // Frontière (ADR-020) : le chemin realtime produit les MÊMES événements de
+  // base que le repli humain. correlationId = callSid Twilio (jamais call.id —
+  // les deux chemins génèrent des ids différents). Émis APRÈS le garde
+  // d'idempotence plus haut — un retry Twilio ne double jamais.
+  const correlationId = body.callSid ?? call.id;
+  await tryAppendRuntimeEvent({
+    companyId: company.id,
+    type: "call.completed",
+    correlationId,
+    externalId: body.callSid,
+    occurredAt: call.startedAt,
+    payload: {
+      transcriptRef: call.id,
+      phone: redactPhone(call.fromNumber),
+      engine: "realtime",
+      status: call.status,
+      durationSec: call.durationSec,
+      turnsCount: turns.length,
+      summary: call.intelligence?.summary ?? null,
+      intent: call.intelligence?.intent ?? null,
+      urgency: call.intelligence?.urgency ?? null,
+      finalStatus: call.intelligence?.finalStatus ?? null,
+      estimatedValueCad: call.intelligence?.estimatedValueCad ?? null,
+      actionsPlanned: actions.length,
+    },
+  });
+  if (body.transferred) {
+    await tryAppendRuntimeEvent({
+      companyId: company.id,
+      type: "call.transferred",
+      correlationId,
+      externalId: body.callSid,
+      payload: {
+        transcriptRef: call.id,
+        phone: redactPhone(call.fromNumber),
+        engine: "realtime",
+        transferReason: body.transferReason ?? null,
+        summary: call.intelligence?.summary ?? null,
+      },
+    });
+  }
+
   // Coffre de consentements (ADR-018) : la réponse captée en appel devient
   // un enregistrement opposable par PERSONNE (oui ET non).
   const consent = consentFromCall(call);
@@ -137,7 +182,42 @@ export async function POST(req: Request) {
       event: "consentement_capté",
       detail: `${consent.phone} · ${consent.status} · « ${consent.verbatim.slice(0, 60)} » (appel ${call.id})`,
     });
+    // Le verbatim du consentement voyage (c'est la preuve opposable) — jamais
+    // le transcript de l'appel, seulement sa référence.
+    await tryAppendRuntimeEvent({
+      companyId: company.id,
+      type: "consent.captured",
+      correlationId,
+      externalId: body.callSid,
+      payload: {
+        phone: redactPhone(consent.phone),
+        status: consent.status,
+        verbatim: consent.verbatim.slice(0, 200),
+        transcriptRef: call.id,
+      },
+    });
   }
+
+  // Frontière : le SIGNAL d'opportunité naît ICI (à la persistance de l'appel),
+  // pas dans computeOpportunities (fonction pure recalculée à chaque page vue).
+  const opportunity = callOpportunitySignal(call.intelligence);
+  if (opportunity) {
+    await tryAppendRuntimeEvent({
+      companyId: company.id,
+      type: "opportunity.detected",
+      correlationId,
+      externalId: body.callSid,
+      payload: {
+        kind: opportunity.kind,
+        reason: opportunity.reason,
+        transcriptRef: call.id,
+        phone: redactPhone(call.fromNumber),
+        estimatedValueCad: call.intelligence?.estimatedValueCad ?? null,
+        urgency: call.intelligence?.urgency ?? null,
+      },
+    });
+  }
+
   await store.recordAudit({
     companyId: company.id,
     actor: "scaly-realtime",

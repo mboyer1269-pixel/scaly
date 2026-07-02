@@ -58,6 +58,30 @@ const URGENCY_RANK: Record<Urgency, number> = { critique: 0, haute: 1, normale: 
 /** Fenêtre de fraîcheur : au-delà, un signal d'appel n'est plus une opportunité chaude. */
 const CALL_WINDOW_DAYS = 7;
 
+/**
+ * Prédicat PARTAGÉ : cet appel crée-t-il une opportunité ? Utilisé par la file
+ * (section 3 ci-dessous) ET par l'Event Boundary (`opportunity.detected` émis
+ * au moment où l'appel est persisté) — une seule définition, jamais de dérive.
+ */
+export function callOpportunitySignal(
+  intel: Call["intelligence"],
+): { kind: "a_rattraper" | "soumission_due" | "client_chaud"; reason: string } | null {
+  if (!intel || intel.intent === "spam") return null;
+  if (intel.intent === "plainte" || intel.sentiment === "negatif") {
+    return {
+      kind: "a_rattraper",
+      reason: intel.intent === "plainte" ? "Plainte exprimée en appel" : "Ton négatif détecté en appel",
+    };
+  }
+  if (intel.intent === "demande_soumission" && intel.finalStatus === "suivi_requis") {
+    return { kind: "soumission_due", reason: "Soumission demandée en appel, pas encore envoyée" };
+  }
+  if (intel.leadQuality === "chaud" && intel.finalStatus === "suivi_requis") {
+    return { kind: "client_chaud", reason: "Lead chaud en attente d'un suivi humain" };
+  }
+  return null;
+}
+
 export interface OpportunityInputs {
   calls: Call[];
   actions: ScalyAction[];
@@ -129,13 +153,15 @@ export function computeOpportunities(company: Company, inputs: OpportunityInputs
     if (!intel || usedCalls.has(call.id) || !recent(call) || intel.intent === "spam") continue;
     const who = call.callerName ?? call.fromNumber;
 
-    if (intel.intent === "plainte" || intel.sentiment === "negatif") {
-      usedCalls.add(call.id);
+    const signal = callOpportunitySignal(intel);
+    if (!signal) continue;
+    usedCalls.add(call.id);
+    if (signal.kind === "a_rattraper") {
       list.push({
         id: `opp_upset_${call.id}`,
-        kind: "a_rattraper",
+        kind: signal.kind,
         title: who,
-        reason: intel.intent === "plainte" ? "Plainte exprimée en appel" : "Ton négatif détecté en appel",
+        reason: signal.reason,
         valueCad: null, // on ne met pas un prix sur une relation à sauver
         urgency: "haute",
         nextAction: "Rappeler aujourd'hui — un client rattrapé reste un client",
@@ -143,15 +169,12 @@ export function computeOpportunities(company: Company, inputs: OpportunityInputs
         link: `/calls/${call.id}`,
         createdAt: call.startedAt,
       });
-      continue;
-    }
-    if (intel.intent === "demande_soumission" && intel.finalStatus === "suivi_requis") {
-      usedCalls.add(call.id);
+    } else if (signal.kind === "soumission_due") {
       list.push({
         id: `opp_quote_${call.id}`,
-        kind: "soumission_due",
+        kind: signal.kind,
         title: who,
-        reason: "Soumission demandée en appel, pas encore envoyée",
+        reason: signal.reason,
         valueCad: intel.estimatedValueCad || baseline,
         urgency: "normale",
         nextAction: "Envoyer la soumission — le suivi J+2 consenti prendra le relais",
@@ -159,15 +182,12 @@ export function computeOpportunities(company: Company, inputs: OpportunityInputs
         link: `/calls/${call.id}`,
         createdAt: call.startedAt,
       });
-      continue;
-    }
-    if (intel.leadQuality === "chaud" && intel.finalStatus === "suivi_requis") {
-      usedCalls.add(call.id);
+    } else {
       list.push({
         id: `opp_hot_${call.id}`,
-        kind: "client_chaud",
+        kind: signal.kind,
         title: who,
-        reason: "Lead chaud en attente d'un suivi humain",
+        reason: signal.reason,
         valueCad: intel.estimatedValueCad || baseline,
         urgency: intel.urgency === "critique" || intel.urgency === "haute" ? "haute" : "normale",
         nextAction: "Rappeler pendant que c'est chaud — la majorité achète du premier répondant",

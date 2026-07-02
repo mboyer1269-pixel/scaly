@@ -14,6 +14,8 @@ import { getStore } from "@/server/store";
 import { twimlFallbackTransfer, validateTwilioSignature } from "@/server/twilio";
 import { resolveTwilioTenant } from "@/server/twilio-tenant";
 import { persistFallbackCall } from "@/server/voice-fallback";
+import { tryAppendRuntimeEvent } from "@/services/event-outbox";
+import { redactPhone } from "@/domain/runtime-event";
 
 export const dynamic = "force-dynamic";
 
@@ -81,6 +83,22 @@ export async function POST(req: Request) {
     actor: "twilio",
     event: "repli_pont_indisponible",
     detail: `${callSid} de ${from} · statut ${callStatus || "?"}${streamError ? ` · ${streamError}` : ""} · <Dial> ${resolved.company.transferPhone}`,
+  });
+  // Frontière (ADR-020) : LA panne runtime de production — le pont était censé
+  // prendre l'appel et ne l'a pas fait. Distinct de runtime.realtime_unavailable
+  // (choix de config) : ici quelque chose a cassé en plein vol.
+  await tryAppendRuntimeEvent({
+    companyId: resolved.company.id,
+    type: "runtime.failure",
+    correlationId: callSid,
+    externalId: callSid !== "inconnu" ? callSid : undefined,
+    payload: {
+      component: "realtime_bridge",
+      phone: redactPhone(from),
+      callStatus: callStatus || null,
+      streamError: streamError || null,
+      recoveredVia: "human_fallback",
+    },
   });
   await persistFallbackCall({
     company: resolved.company,
