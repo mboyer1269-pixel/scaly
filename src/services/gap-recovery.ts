@@ -30,7 +30,7 @@ import { GAP_RECOVERY_CAPABILITY, offerIdempotencyKey } from "@/domain/gap-recov
 import type { ConsentRecord } from "@/domain/consent";
 import { canonicalPhone } from "@/domain/consent";
 import type { Urgency } from "@/domain/call";
-import { findIndustryPack, GENERAL_PACK } from "@/data/industry-packs";
+import { getIndustryPack, GENERAL_PACK } from "@/data/industry-packs";
 import { packSupportsCapability, requireCapability } from "@/data/capabilities";
 import { canFollowUp, consentFromCall } from "@/services/consent";
 import { newId } from "@/lib/format";
@@ -256,8 +256,12 @@ export interface CaptureWaitlistResult {
 
 /**
  * Capte l'intention liste d'attente d'un appel analysé → WaitlistEntry persistée.
- * Capability-driven : si le pack du tenant ne supporte pas appointment_gap_recovery,
- * on retourne un refus PROPRE (le repli follow-up humain existant s'applique) — jamais de crash.
+ * Capability-driven avec REPLI : une industrie sans pack dédié utilise le pack
+ * PME générale (invariant produit : le repli general_sme ne crashe jamais) —
+ * une plomberie a aussi des rendez-vous annulés. Le PROMPT vocal, lui, reste
+ * strict (findIndustryPack) : la capture est post-appel, elle ne touche pas
+ * au comportement en ligne des industries sans pack. Refus propre seulement
+ * si le pack résolu ne déclare pas la capability.
  * Idempotent : même appel (sourceCallId) ou même numéro déjà actif → pas de doublon.
  */
 export async function captureWaitlistEntryFromCall(
@@ -268,7 +272,7 @@ export async function captureWaitlistEntryFromCall(
   if (!call.companyId) throw new GapRecoveryError("companyId obligatoire sur l'appel — aucune donnée sans tenant.");
   const { repo, audit, now } = resolve(options);
 
-  const pack = findIndustryPack(company.industry);
+  const pack = getIndustryPack(company.industry);
   if (!packSupportsCapability(pack, GAP_RECOVERY_CAPABILITY)) {
     return { created: false, reason: "capability_non_supportee" };
   }
@@ -291,7 +295,7 @@ export async function captureWaitlistEntryFromCall(
   const entry: WaitlistEntry = {
     id: newId("wait"),
     companyId: call.companyId,
-    industryPackId: pack!.id,
+    industryPackId: pack.id,
     capabilityId: GAP_RECOVERY_CAPABILITY,
     callerName: call.callerName ?? (fields["callerName"] || undefined),
     phone,
@@ -434,7 +438,7 @@ export async function openAppointmentGap(
   if (!input.humanLabel?.trim()) throw new GapRecoveryError("humanLabel obligatoire — la plage doit rester lisible sans calendrier.");
   requireCapability(GAP_RECOVERY_CAPABILITY); // échec propre AVANT toute écriture si la capability disparaît du registre
   const { repo, audit, now } = resolve(options);
-  const pack = findIndustryPack(company.industry);
+  const pack = getIndustryPack(company.industry); // repli PME : gabarits et taxonomie toujours résolus
 
   if (input.idempotencyKey) {
     const existing = await repo.findGapByIdempotencyKey(input.companyId, input.idempotencyKey);
@@ -489,7 +493,7 @@ export async function prepareOffersForGap(
   if (gap.companyId !== company.id) throw new GapRecoveryError("Plage d'un autre tenant — accès refusé.");
   if (gap.status !== "open" && gap.status !== "offered") return [];
 
-  const pack = findIndustryPack(company.industry);
+  const pack = getIndustryPack(company.industry);
   const defaultLimit = capability.defaultLimits.maxCandidatesPerGap;
   const limit = Math.min(Math.max(1, options?.maxCandidates ?? defaultLimit), defaultLimit * 2);
 

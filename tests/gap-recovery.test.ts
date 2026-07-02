@@ -205,11 +205,13 @@ describe("capture WaitlistEntry depuis un appel", () => {
     expect(saved.consentToSms).toBe("unknown"); // rien capté → jamais inventé
   });
 
-  it("industrie SANS pack → refus propre capability_non_supportee, rien persisté, pas de crash", async () => {
+  it("industrie SANS pack → capture via le REPLI PME générale (une plomberie a aussi des annulations)", async () => {
     const { options, repo } = engine();
     const result = await captureWaitlistEntryFromCall(call(NO_PACK, ["Mettez-moi sur la liste d'attente"]), NO_PACK, options);
-    expect(result).toEqual({ created: false, reason: "capability_non_supportee" });
-    expect(await repo.listWaitlistEntries(NO_PACK.id)).toHaveLength(0);
+    expect(result.created).toBe(true);
+    const saved = (await repo.listWaitlistEntries(NO_PACK.id))[0];
+    expect(saved.industryPackId).toBe("pack_pme"); // repli tracé, jamais de crash
+    expect(saved.companyId).toBe(NO_PACK.id);
   });
 
   it("téléphone inconnu → refus propre, pas d'entrée fantôme", async () => {
