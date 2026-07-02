@@ -1,5 +1,9 @@
 # Roadmap technique Scaly — du mock au standard
 
+## Phase 4 — plan de match Revenue Voice OS
+
+Le plan d'execution Phase 4 est documente dans [`docs/PHASE_4_PLAN.md`](docs/PHASE_4_PLAN.md). Il couvre l'ajout progressif de LiveKit, LangGraph, LiteLLM, auth mobile native, RAG/business brain et observabilite couts/traces, sans remplacer le chemin voix champion ni supprimer les surfaces mobile/readiness/billing.
+
 ## Hypothèses de travail (documentées, modifiables)
 - Solo founder + IA, budget infra initial < 200 $CA/mois, premiers revenus visés avant la fin de P3.
 - Cloud public : Vercel (app) + Fly.io/Railway (realtime) + Neon/Supabase Postgres (région CA).
