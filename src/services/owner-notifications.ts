@@ -136,7 +136,7 @@ export interface PostCallNotificationInput {
   recommendedAction: string;
   urgency: Urgency;
   title?: string;
-  type?: Extract<OwnerNotificationType, "post_call_summary" | "escalation" | "follow_up_needed">;
+  type?: Extract<OwnerNotificationType, "post_call_summary" | "escalation" | "follow_up_needed" | "gap_filled">;
   sourceCallId?: string;
   sourceTraceId?: string;
   modelCostEstimateCad?: number;
@@ -146,6 +146,7 @@ const POST_CALL_TITLES: Record<PostCallNotificationInput["type"] & string, strin
   post_call_summary: "Récapitulatif d'appel",
   escalation: "Escalade — décision requise",
   follow_up_needed: "Suivi requis",
+  gap_filled: "🎉 Plage comblée",
 };
 
 export async function createPostCallNotification(

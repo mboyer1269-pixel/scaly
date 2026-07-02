@@ -119,6 +119,6 @@ export function answerOwnerKeyword(keyword: OwnerKeyword, company: Company, call
     case "RESUME":
       return buildDailyDigest(company, calls, actions, now).smsText;
     case "AIDE":
-      return "Scaly — répondez :\nCHAUDS = leads à rappeler\nMÉCONTENTS = clients à risque\nÀ SAUVER = appels manqués récupérables\nRÉSUMÉ = pouls du jour";
+      return "Allô Maude — répondez :\nCHAUDS = leads à rappeler\nMÉCONTENTS = clients à risque\nÀ SAUVER = appels manqués récupérables\nRÉSUMÉ = pouls du jour";
   }
 }

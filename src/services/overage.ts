@@ -45,7 +45,7 @@ export function buildOverageAlert(company: Company, calls: Call[], now = new Dat
       minutesUsed: Math.ceil(minutesUsed),
       includedMinutes: plan.includedMinutes,
       smsText:
-        `Scaly — minutes du mois dépassées : ${Math.ceil(minutesUsed)}/${plan.includedMinutes} min (plan ${plan.label}). ` +
+        `Allô Maude — minutes du mois dépassées : ${Math.ceil(minutesUsed)}/${plan.includedMinutes} min (plan ${plan.label}). ` +
         `Excédent estimé : ${invoice.overageCad.toFixed(2).replace(".", ",")} $ au tarif publié (${plan.overagePerMinuteCad.toFixed(2).replace(".", ",")} $/min). ` +
         `Aucune coupure de service. Détails : votre tableau de bord.`,
     };
@@ -56,7 +56,7 @@ export function buildOverageAlert(company: Company, calls: Call[], now = new Dat
     minutesUsed: Math.ceil(minutesUsed),
     includedMinutes: plan.includedMinutes,
     smsText:
-      `Scaly — vous approchez de vos minutes incluses : ${Math.ceil(minutesUsed)}/${plan.includedMinutes} min (plan ${plan.label}). ` +
+      `Allô Maude — vous approchez de vos minutes incluses : ${Math.ceil(minutesUsed)}/${plan.includedMinutes} min (plan ${plan.label}). ` +
       `Au-delà : ${plan.overagePerMinuteCad.toFixed(2).replace(".", ",")} $/min, aucune coupure de service.`,
   };
 }

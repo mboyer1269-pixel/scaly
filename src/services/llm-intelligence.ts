@@ -92,7 +92,7 @@ const RESPONSE_SCHEMA = {
 
 function systemPrompt(script: IndustryScript): string {
   const fieldKeys = script.questions.map((q) => `${q.fieldKey}${q.required ? " (requis)" : ""}`).join(", ");
-  return `Tu es l'analyste d'appels de Scaly, une réceptionniste IA pour PME québécoises (français québécois et anglais).
+  return `Tu es l'analyste d'appels d'Allô Maude, une réceptionniste IA pour PME québécoises (français québécois et anglais).
 On te donne le transcript brut d'un appel téléphonique. Analyse-le UNIQUEMENT à partir de ce qui est dit.
 
 DÉFINITIONS D'INTENTION (choisis la raison d'appel dominante du point de vue de l'appelant) :

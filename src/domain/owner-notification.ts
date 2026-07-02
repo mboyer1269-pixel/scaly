@@ -12,7 +12,8 @@ export type OwnerNotificationType =
   | "post_call_summary"
   | "unknown_answer"
   | "escalation"
-  | "follow_up_needed";
+  | "follow_up_needed"
+  | "gap_filled";
 
 export type OwnerNotificationStatus = "pending" | "sent" | "failed" | "dismissed";
 

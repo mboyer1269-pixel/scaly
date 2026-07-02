@@ -136,7 +136,7 @@ export function buildInsights(company: Company, calls: Call[], baselineCad: numb
       id: "ins_sauves",
       kind: "tendance",
       title: `${saved.length} appel${saved.length > 1 ? "s" : ""} sauvé${saved.length > 1 ? "s" : ""} (hors heures ou rappel auto)`,
-      detail: `Sans Scaly, ces appels seraient probablement perdus. Valeur estimée protégée : ${formatCad(total)}.`,
+      detail: `Sans Allô Maude, ces appels seraient probablement perdus. Valeur estimée protégée : ${formatCad(total)}.`,
       impactCad: total,
       callIds: saved.map((c) => c.id),
     });

@@ -18,6 +18,7 @@
     "db:purge": "tsx scripts/purge.ts",
     "eval:golden": "tsx scripts/eval-golden.ts",
     "pilot:check": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import=tsx scripts/pilot-check.ts",
+    "security:check": "node --import=tsx scripts/security-check.ts",
     "demo:check": "node --import=tsx scripts/demo-check.ts",
     "mobile:check": "node --import=tsx scripts/mobile-check.ts",
     "mobile:start": "npm --prefix apps/mobile run start",

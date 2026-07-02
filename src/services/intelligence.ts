@@ -167,7 +167,7 @@ class RulesV1Engine implements IntelligenceEngine {
         ? `Plainte de ${fields["nom"] ?? call.callerName ?? "l'appelant"} : insatisfaction exprimée. Rappel de service prioritaire requis.`
         : fillTemplate(script.expectedSummary, { ...fields, description: fields["description"] ?? "demande à préciser" });
     if (urgency === "critique" && !isSpam) summary = `URGENT — ${summary}`;
-    if (hints.savedReason === "hors_heures") summary += " (Appel reçu hors heures d'ouverture — sauvé par Scaly.)";
+    if (hints.savedReason === "hors_heures") summary += " (Appel reçu hors heures d'ouverture — sauvé par Allô Maude.)";
 
     const tags = [
       ...script.crmTags,

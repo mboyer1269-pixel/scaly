@@ -24,6 +24,10 @@ const CUSTOMER_FILES = [
   "src/components/SettingsForm.tsx",
   "src/components/AlloMaudeLanding.tsx",
   "src/components/CoverageForm.tsx",
+  "src/app/(app)/annulations/page.tsx",
+  "src/app/(app)/opportunites/page.tsx",
+  "src/app/(app)/roi/page.tsx",
+  "src/components/GapRecoveryClient.tsx",
 ];
 
 function visibleScalyReferences(source: string): string[] {

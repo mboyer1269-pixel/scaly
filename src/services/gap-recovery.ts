@@ -31,8 +31,10 @@ import type { ConsentRecord } from "@/domain/consent";
 import { canonicalPhone } from "@/domain/consent";
 import type { Urgency } from "@/domain/call";
 import { getIndustryPack, GENERAL_PACK } from "@/data/industry-packs";
+import { getScriptByIndustry } from "@/data/industry-scripts";
 import { packSupportsCapability, requireCapability } from "@/data/capabilities";
 import { canFollowUp, consentFromCall } from "@/services/consent";
+import { createPostCallNotification } from "@/services/owner-notifications";
 import { newId } from "@/lib/format";
 
 /* ------------------------------------------------------------------ */
@@ -362,6 +364,24 @@ export function matchWaitlistCandidates(
     .slice(0, Math.max(0, limit));
 }
 
+/**
+ * Pourquoi CE candidat a été choisi — la transparence que le propriétaire voit
+ * à côté de chaque offre. Dérivée des règles réelles du matching, jamais inventée.
+ */
+export function describeMatchReason(entry: WaitlistEntry, gap: AppointmentGap): string {
+  const parts: string[] = [];
+  if (gap.serviceCategory && entry.desiredServiceCategory === gap.serviceCategory) {
+    parts.push("demande le même service");
+  } else if (!entry.desiredServiceCategory) {
+    parts.push("en attente sans service précisé (repli prudent)");
+  } else {
+    parts.push("service compatible");
+  }
+  if (entry.urgency === "critique" || entry.urgency === "haute") parts.push(`urgence ${entry.urgency}`);
+  parts.push(entry.consentToSms === "yes" ? "consentement SMS capté en appel" : "consentement à confirmer (relance manuelle)");
+  return parts.join(" · ");
+}
+
 /* ------------------------------------------------------------------ */
 /* Phase 8 — Message prudent (fonction PURE)                            */
 /* ------------------------------------------------------------------ */
@@ -639,6 +659,25 @@ export async function confirmRecoveryOffer(
   if (gap && gap.companyId === companyId && gap.status !== "cancelled") {
     await repo.saveGap({ ...gap, status: "filled", updatedAt: now.toISOString() });
     await audit.record({ event: "appointment_gap.filled", companyId, detail: `${gap.id} · via offre ${offer.id}` });
+
+    // Le moment ROI que le propriétaire doit VOIR sans ouvrir la page :
+    // « 🎉 Plage comblée » avec la valeur estimée (barème d'industrie — une
+    // hypothèse honnête, pas une promesse). Best-effort, jamais bloquant.
+    if (notify?.company) {
+      try {
+        const who = entry?.callerName ?? (entry ? canonicalPhone(entry.phone) : "Un client");
+        const valueCad = getScriptByIndustry(notify.company.industry).valueBaselineCad;
+        await createPostCallNotification(companyId, {
+          type: "gap_filled",
+          summary: `${who} a pris la plage ${gap.humanLabel}. Valeur estimée récupérée : ${valueCad} $ (barème d'industrie, à recalibrer avec vos chiffres réels).`,
+          recommendedAction: "Confirmer le rendez-vous au dossier et préparer l'accueil.",
+          urgency: "normale",
+          sourceCallId: entry?.sourceCallId,
+        });
+      } catch {
+        // La notification est un bonus visible — la confirmation reste la vérité.
+      }
+    }
   }
   for (const sibling of await repo.listOffers(companyId, offer.gapId)) {
     if (sibling.id !== offer.id && (sibling.status === "prepared" || sibling.status === "sent")) {

@@ -25,6 +25,7 @@ import {
   captureWaitlistEntryFromCall,
   confirmRecoveryOffer,
   declineRecoveryOffer,
+  describeMatchReason,
   detectWaitlistIntent,
   expireStaleGapRecovery,
   findActionableOfferForPhone,
@@ -688,6 +689,48 @@ describe("premier OUI gagne — les autres sont prévenus, jamais laissés en su
     const result = await handleOfferReply(DENTAL, a.phone, "OUI", options, notify);
     expect(result.handled).toBe(true);
     expect((await repo.listGaps(DENTAL.id))[0].status).toBe("filled");
+  });
+});
+
+describe("moment ROI — notification propriétaire quand la plage est comblée", () => {
+  it("confirmer avec notify crée une notification gap_filled avec nom, plage et valeur estimée", async () => {
+    const { options, repo } = engine();
+    const { InMemoryOwnerNotificationRepository } = await import("@/services/owner-notifications");
+    const g = globalThis as { __scalyOwnerNotifications?: unknown };
+    const prev = g.__scalyOwnerNotifications;
+    const ownerRepo = new InMemoryOwnerNotificationRepository();
+    g.__scalyOwnerNotifications = ownerRepo;
+    try {
+      const e = await repo.saveWaitlistEntry(entry());
+      const { offers } = await openedGap(options, { serviceCategory: undefined });
+      await sendPreparedOffers(DENTAL, [activeConsent(e.phone)], { send: async () => ({}) }, options);
+      await confirmRecoveryOffer(DENTAL.id, offers[0].id, options, { company: DENTAL });
+
+      const notes = await ownerRepo.list(DENTAL.id);
+      const filled = notes.find((n) => n.type === "gap_filled");
+      expect(filled).toBeDefined();
+      expect(filled!.title).toContain("Plage comblée");
+      expect(filled!.summary).toContain("Julie Tremblay");
+      expect(filled!.summary).toContain("jeudi 3 juillet à 14 h");
+      expect(filled!.summary).toMatch(/\d+ \$/); // valeur estimée présente
+      expect(filled!.summary).toMatch(/barème/); // hypothèse assumée, pas une promesse
+    } finally {
+      if (prev === undefined) delete g.__scalyOwnerNotifications; else g.__scalyOwnerNotifications = prev;
+    }
+  });
+
+  it("describeMatchReason explique le choix avec les règles réelles du matching", () => {
+    const g: AppointmentGap = {
+      id: "gap_r", companyId: DENTAL.id, capabilityId: "appointment_gap_recovery",
+      humanLabel: "jeudi 14 h", source: "manual", status: "open", serviceCategory: "cleaning",
+      createdAt: NOW.toISOString(), updatedAt: NOW.toISOString(),
+    };
+    expect(describeMatchReason(entry({ desiredServiceCategory: "cleaning", urgency: "haute" }), g))
+      .toBe("demande le même service · urgence haute · consentement SMS capté en appel");
+    expect(describeMatchReason(entry({ desiredServiceCategory: undefined, consentToSms: "unknown" }), g))
+      .toContain("repli prudent");
+    expect(describeMatchReason(entry({ desiredServiceCategory: undefined, consentToSms: "unknown" }), g))
+      .toContain("consentement à confirmer");
   });
 });
 

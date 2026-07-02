@@ -10,7 +10,8 @@
 import { getStore } from "@/server/store";
 import { resolveCompanyId } from "@/server/tenant";
 import { getIndustryPack } from "@/data/industry-packs";
-import { expireStaleGapRecovery, getGapRecoveryRepository } from "@/services/gap-recovery";
+import { getScriptByIndustry } from "@/data/industry-scripts";
+import { describeMatchReason, expireStaleGapRecovery, getGapRecoveryRepository } from "@/services/gap-recovery";
 import { Badge, Card, EmptyState, HonestyNote, PageHeader, Stat } from "@/components/ui";
 import { OfferActions, OpenGapForm } from "@/components/GapRecoveryClient";
 import { formatDateTime } from "@/lib/format";
@@ -77,6 +78,8 @@ export default async function AnnulationsPage() {
   const waiting = waitlist.filter((entry) => entry.status === "active").length;
   const filled = gaps.filter((gap) => gap.status === "filled").length;
   const sentCount = offers.filter((offer) => offer.status === "sent" || offer.status === "confirmed").length;
+  const baselineCad = company ? getScriptByIndustry(company.industry).valueBaselineCad : 0;
+  const recoveredCad = filled * baselineCad;
 
   return (
     <>
@@ -89,7 +92,12 @@ export default async function AnnulationsPage() {
         <Stat label="En attente d'une place" value={String(waiting)} sub="captés pendant les appels" tone="teal" />
         <Stat label="Relances parties" value={String(sentCount)} sub="toujours consenties" tone="sky" />
         <Stat label="Plages comblées" value={String(filled)} tone="emerald" sub="au lieu de rester vides" />
-        <Stat label="Plages suivies" value={String(gaps.length)} sub="sans calendrier à gérer" />
+        <Stat
+          label="Valeur récupérée (est.)"
+          value={`${recoveredCad.toLocaleString("fr-CA")} $`}
+          tone={recoveredCad > 0 ? "emerald" : "slate"}
+          sub="barème d'industrie, à recalibrer"
+        />
       </div>
 
       <Card
@@ -116,6 +124,9 @@ export default async function AnnulationsPage() {
                       <span className="text-xs text-ink-500">· {gap.serviceLabel ?? pack?.serviceCategories.find((c) => c.id === gap.serviceCategory)?.label ?? gap.serviceCategory}</span>
                     ) : null}
                     <Badge tone={gapBadge.tone}>{gapBadge.label}</Badge>
+                    {gap.status === "filled" && baselineCad > 0 && (
+                      <span className="text-xs font-semibold text-emerald-700">≈ +{baselineCad.toLocaleString("fr-CA")} $ récupérés (est.)</span>
+                    )}
                     <span className="ml-auto text-xs text-ink-400">{formatDateTime(gap.createdAt)}</span>
                   </div>
                   {gapOffers.length === 0 ? (
@@ -126,20 +137,22 @@ export default async function AnnulationsPage() {
                         const entry = entryById.get(offer.waitlistEntryId);
                         const offerBadge = OFFER_BADGE[offer.status];
                         return (
-                          <li key={offer.id} className="flex flex-wrap items-center gap-2 rounded-lg bg-ink-50/60 px-3 py-2">
-                            <span className="text-sm font-medium text-ink-800">
-                              {entry?.callerName ?? (entry ? formatPhone(entry.phone) : "—")}
-                            </span>
-                            {entry?.callerName && entry?.phone && (
-                              <span className="text-xs text-ink-500">{formatPhone(entry.phone)}</span>
-                            )}
-                            <Badge tone={offerBadge.tone}>{offerBadge.label}</Badge>
-                            {offer.channel === "action_only" && (
-                              <span className="text-xs text-amber-700">consentement SMS à confirmer — relance manuelle</span>
-                            )}
-                            <div className="ml-auto">
-                              <OfferActions offerId={offer.id} status={offer.status} />
+                          <li key={offer.id} className="rounded-lg bg-ink-50/60 px-3 py-2">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="text-sm font-medium text-ink-800">
+                                {entry?.callerName ?? (entry ? formatPhone(entry.phone) : "—")}
+                              </span>
+                              {entry?.callerName && entry?.phone && (
+                                <span className="text-xs text-ink-500">{formatPhone(entry.phone)}</span>
+                              )}
+                              <Badge tone={offerBadge.tone}>{offerBadge.label}</Badge>
+                              <div className="ml-auto">
+                                <OfferActions offerId={offer.id} status={offer.status} />
+                              </div>
                             </div>
+                            {entry && (
+                              <p className="mt-1 text-xs text-ink-500">Pourquoi : {describeMatchReason(entry, gap)}</p>
+                            )}
                           </li>
                         );
                       })}
