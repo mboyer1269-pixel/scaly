@@ -188,8 +188,8 @@ export const INDUSTRY_SCRIPTS: IndustryScript[] = [
     industry: "dentiste",
     name: "Clinique dentaire — RDV, urgences dentaires et rappels",
     primaryIntent: "prise_rdv",
-    greeting: "Clinique dentaire {company}, bonjour ! Ici {agent}, assistante virtuelle. Comment puis-je vous aider ?",
-    greetingEn: "{company} dental clinic, hello! This is {agent}, the virtual assistant. How can I help you?",
+    greeting: "{company}, bonjour ! Ici {agent}, assistante virtuelle. Comment puis-je vous aider ?",
+    greetingEn: "{company}, hello! This is {agent}, the virtual assistant. How can I help you?",
     questions: [
       ...BASE_QUESTIONS,
       Q("description", "Est-ce pour un nettoyage, un examen ou un problème particulier ?", "Is this for a cleaning, an exam, or a specific issue?"),
