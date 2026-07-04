@@ -12,7 +12,17 @@
  *  - les limites par défaut sont volontairement basses (jamais de « blast everyone »).
  */
 
-export type CapabilityId = "appointment_gap_recovery";
+import type { RuntimeEventType } from "./runtime-event";
+
+export type CapabilityId =
+  | "appointment_gap_recovery"
+  | "owner_notification"
+  | "opportunity_detection"
+  | "roi_reporting"
+  | "consent_capture"
+  | "human_handoff"
+  | "missed_call_rescue"
+  | "quote_follow_up";
 
 export type CapabilityChannel = "sms" | "call" | "action_only";
 
@@ -29,6 +39,13 @@ export interface CapabilityDefinition {
   safetyRules: string[];
   /** Événements d'audit que le moteur émet — le fil d'action doit pouvoir tout retracer. */
   auditEvents: string[];
+  /**
+   * Événements RuntimeEvent RÉELLEMENT émis dans l'outbox (ADR-020) quand la
+   * capability s'exécute. Typés contre RUNTIME_EVENT_TYPES : impossible de
+   * déclarer un événement qui n'existe pas. Vide = la capability ne franchit
+   * pas encore la frontière — honnêteté, pas une promesse.
+   */
+  runtimeEvents: RuntimeEventType[];
   defaultLimits: Record<string, number>;
 }
 

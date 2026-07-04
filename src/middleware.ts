@@ -5,7 +5,7 @@
  *   par signature (Stripe HMAC, Twilio) — un webhook ne peut PAS porter de
  *   session Clerk, le bloquer ici casserait la téléphonie et la facturation.
  *   /api/billing/checkout est public (rate-limité) : c'est le funnel de /pricing.
- * - Réservé au rôle founder : /admin, /api/admin, /status.
+ * - Réservé au rôle founder : /admin, /api/admin, /status, /agent-os.
  * - Tout le reste exige une session.
  */
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
@@ -29,7 +29,7 @@ const isPublicRoute = createRouteMatcher([
   "/api/sms/incoming(.*)",
   "/api/voice/(.*)",
 ]);
-const isFounderRoute = createRouteMatcher(["/admin(.*)", "/api/admin(.*)", "/status(.*)"]);
+const isFounderRoute = createRouteMatcher(["/admin(.*)", "/api/admin(.*)", "/status(.*)", "/agent-os(.*)"]);
 
 const authMode = authRuntimeMode();
 
