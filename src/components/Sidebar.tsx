@@ -10,6 +10,7 @@ import {
   BookOpen,
   Brain,
   CalendarClock,
+  Cpu,
   LayoutDashboard,
   Lightbulb,
   Menu,
@@ -43,6 +44,7 @@ const NAV = [
   { href: "/readiness/live", label: "Appels réels", icon: Phone },
   { href: "/readiness/mobile", label: "Mobile stores", icon: Rocket },
   { href: "/status", label: "Statut technique", icon: Activity },
+  { href: "/agent-os", label: "Agent OS", icon: Cpu },
   { href: "/agent", label: "Voix de Maude", icon: Bot },
 ];
 
