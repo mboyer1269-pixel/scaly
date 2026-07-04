@@ -90,6 +90,25 @@ export async function requireTenant(): Promise<RequiredTenant> {
   return { companyId: tenant.companyId };
 }
 
+/**
+ * Décision PURE pour les opérations DESTRUCTRICES (suppression de compte).
+ * N'autorise QUE les tenants issus d'un claim réel : tout repli démo ou no-auth
+ * est bloqué — même pour le founder, qui utilise la démo par confort partout
+ * ailleurs mais ne doit JAMAIS effacer DEFAULT_COMPANY_ID par accident. C'est la
+ * différence entre « lire la démo » (toléré) et « supprimer la démo » (interdit).
+ */
+export function requireClaimedTenantDecision(decision: ResolvedTenant): RequiredTenant {
+  return decision.source === "claim" ? { companyId: decision.companyId } : { block: true };
+}
+
+/**
+ * Barrière de la session courante pour une opération destructrice : exige un
+ * tenant explicitement réclamé (companyId dans les claims), sinon bloque.
+ */
+export async function requireClaimedTenant(): Promise<RequiredTenant> {
+  return requireClaimedTenantDecision(await resolveTenant());
+}
+
 /** Entreprise de la session courante (undefined si l'id mappé n'existe pas en base). */
 export async function resolveCompany(): Promise<Company | undefined> {
   return getStore().getCompany(await resolveCompanyId());
