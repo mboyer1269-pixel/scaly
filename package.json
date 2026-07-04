@@ -20,6 +20,8 @@
     "pilot:check": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import=tsx scripts/pilot-check.ts",
     "security:check": "node --import=tsx scripts/security-check.ts",
     "demo:check": "node --import=tsx scripts/demo-check.ts",
+    "demo:audio": "tsx scripts/generate-demo-audio.ts",
+    "voice:gate": "tsx scripts/generate-voice-gate.ts",
     "mobile:check": "node --import=tsx scripts/mobile-check.ts",
     "mobile:start": "npm --prefix apps/mobile run start",
     "realtime": "node --env-file-if-exists=.env --env-file-if-exists=.env.local --import=tsx realtime/server.ts",

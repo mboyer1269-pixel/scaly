@@ -27,3 +27,11 @@ install.log
 .vibe/
 skills/
 skills-lock.json
+
+# Audio de démo généré (TTS) — ne pas committer sans accord (voir public/demo-audio/README.md)
+public/demo-audio/**/*.mp3
+public/demo-audio/manifest.json
+
+# Voice Gate — audio A/B généré (TTS), sélection de voix interne
+public/voice-gate/**/*.mp3
+public/voice-gate/manifest.json
