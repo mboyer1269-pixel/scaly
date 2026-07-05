@@ -232,6 +232,60 @@ describe("PR2 isolation routes", () => {
   });
 });
 
+describe("PR #41 — routes d'écriture exigent un tenant réclamé", () => {
+  // Fallback dangereux : auth active + non-founder SANS companyId dans les claims.
+  function dangerousOwnerSession() {
+    clearAuthEnv();
+    configureClerkAuth({ metadata: { role: "owner" } });
+    vi.spyOn(console, "warn").mockImplementation(() => undefined);
+  }
+
+  // Corps valide pour atteindre la garde des routes onboarding (garde placée
+  // après la validation approved/draft) ; ignoré par company/agent/reviews (garde en tête).
+  const writeReq = (method: "PUT" | "POST") =>
+    new Request("http://localhost", { method, body: JSON.stringify({ approved: true, draft: {} }) });
+
+  it("company PUT → 409 sur le fallback démo dangereux", async () => {
+    dangerousOwnerSession();
+    const { PUT } = await import("@/app/api/company/route");
+    expect((await PUT(writeReq("PUT"))).status).toBe(409);
+  });
+
+  it("agent PUT → 409 sur le fallback démo dangereux", async () => {
+    dangerousOwnerSession();
+    const { PUT } = await import("@/app/api/agent/route");
+    expect((await PUT(writeReq("PUT"))).status).toBe(409);
+  });
+
+  it("onboarding/apply POST → 409 sur le fallback démo dangereux", async () => {
+    dangerousOwnerSession();
+    const { POST } = await import("@/app/api/onboarding/apply/route");
+    expect((await POST(writeReq("POST"))).status).toBe(409);
+  });
+
+  it("onboarding/coach/apply POST → 409 sur le fallback démo dangereux", async () => {
+    dangerousOwnerSession();
+    const { POST } = await import("@/app/api/onboarding/coach/apply/route");
+    expect((await POST(writeReq("POST"))).status).toBe(409);
+  });
+
+  it("reviews/[id] PUT → 409 sur le fallback démo dangereux", async () => {
+    dangerousOwnerSession();
+    const { PUT } = await import("@/app/api/reviews/[id]/route");
+    const res = await PUT(writeReq("PUT"), { params: Promise.resolve({ id: "rev_x" }) });
+    expect(res.status).toBe(409);
+  });
+
+  it("préserve la démo no-auth : company PUT ne bloque pas (repli DEFAULT_COMPANY_ID)", async () => {
+    clearAuthEnv();
+    const { PUT } = await import("@/app/api/company/route");
+    // Corps JSON invalide → 400 (la garde a laissé passer le repli démo, sinon 409).
+    const res = await PUT(new Request("http://localhost", { method: "PUT", body: "not json" }));
+    expect(res.status).not.toBe(409);
+    expect(res.status).toBe(400);
+  });
+});
+
 describe("filterVoiceSessionsForTenant", () => {
   const records = [
     record("vs_a", "comp_a", "2026-06-01T10:00:00.000Z"),

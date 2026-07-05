@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { isJsonObject } from "@/lib/request-body";
 import { validateCoachingDraft } from "@/services/onboarding";
 import { getStore } from "@/server/store";
-import { resolveCompanyId } from "@/server/tenant";
+import { requireTenant } from "@/server/tenant";
 
 export const dynamic = "force-dynamic";
 
@@ -20,8 +20,11 @@ export async function POST(req: Request) {
     );
   }
 
+  const tenant = await requireTenant();
+  if ("block" in tenant) return NextResponse.json({ error: "Tenant authentifié requis." }, { status: 409 });
+  const companyId = tenant.companyId;
+
   const store = getStore();
-  const companyId = await resolveCompanyId();
   const [company, agent] = await Promise.all([
     store.getCompany(companyId),
     store.getAgentByCompany(companyId),
