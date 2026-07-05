@@ -7,7 +7,12 @@ import { AlertTriangle, ArrowRight, Download, Flame, Lightbulb, MessageSquareWar
 import { getStore } from "@/server/store";
 import { resolveCompany } from "@/server/tenant";
 import { computeDashboard, computePhonePerformanceScore } from "@/services/analytics";
+import { computeRevenueCounter } from "@/services/revenue";
 import { computeRescueQueue, computeRoiSnapshot } from "@/services/rescue";
+import { listOwnerNotifications } from "@/services/owner-notifications";
+import { listReviewRequests } from "@/services/review-requests";
+import { OwnerActionsCard } from "@/components/OwnerActionsCard";
+import { ReviewRequestsCard } from "@/components/ReviewRequestsCard";
 import { Badge, Card, EmptyState, PageHeader, Stat } from "@/components/ui";
 import { callStatusBadge, leadBadge, urgencyBadge } from "@/lib/labels";
 import { INTENT_LABELS, NEXT_ACTION_LABELS } from "@/domain/call";
@@ -34,12 +39,15 @@ export default async function DashboardPage() {
   const store = getStore();
   const company = (await resolveCompany())!;
   const calls = await store.listCalls(company.id);
-  const [actions, reviews] = await Promise.all([
+  const [actions, reviews, ownerActions, reviewRequests] = await Promise.all([
     store.listActions(company.id),
     store.listReviewItems(company.id, "open"),
+    listOwnerNotifications(company.id, { status: ["pending", "failed"] }),
+    listReviewRequests(company.id, { status: ["drafted", "eligible", "failed"] }),
   ]);
   const d = computeDashboard(company, calls, actions);
   const roi = computeRoiSnapshot(company, d, calls);
+  const revenue = computeRevenueCounter(calls, { periodDays: d.periodDays });
   const rescue = computeRescueQueue(company, calls, actions).slice(0, 5);
   const perf = computePhonePerformanceScore(d);
   const maxDay = Math.max(1, ...d.byDay.map((b) => b.total));
@@ -59,9 +67,21 @@ export default async function DashboardPage() {
         </div>
       </PageHeader>
 
+      {ownerActions.length > 0 && (
+        <div className="mb-6">
+          <OwnerActionsCard initial={ownerActions} />
+        </div>
+      )}
+
+      {reviewRequests.length > 0 && (
+        <div className="mb-6">
+          <ReviewRequestsCard initial={reviewRequests} />
+        </div>
+      )}
+
       {/* === La réponse en 60 secondes : l'argent, puis les appels à sauver === */}
       <div className="mb-6 grid grid-cols-1 gap-6 lg:grid-cols-5">
-        <Card title="Ce que Maude a protégé" subtitle={`${roi.periodDays} derniers jours · estimations par barème d'industrie, recalibrées par client`} className="lg:col-span-2">
+        <Card title="Impact revenus/coûts" subtitle={`${roi.periodDays} derniers jours · argent protégé et coûts IA estimés`} className="lg:col-span-2">
           <p className="text-3xl font-black text-emerald-600">{formatCad(roi.protectedCad)}</p>
           <p className="mt-1 text-sm leading-relaxed text-ink-600">
             protégés sur <span className="font-semibold text-ink-900">{roi.wouldBeLostCount} appel{roi.wouldBeLostCount > 1 ? "s" : ""}</span> qui
@@ -69,12 +89,31 @@ export default async function DashboardPage() {
               <> — <span className="font-bold text-ink-900">{String(roi.multiple).replace(".", ",")}×</span> le prix de votre plan ({formatCad(roi.planPriceCad)}/mois)</>
             )}.
           </p>
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-3 py-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-emerald-700">Argent protégé</p>
+              <p className="mt-1 text-sm font-bold text-emerald-800">{formatCad(revenue.protectedCad)}</p>
+            </div>
+            <div className="rounded-lg border border-sky-100 bg-sky-50 px-3 py-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-sky-700">Coût IA estimé</p>
+              <p className="mt-1 text-sm font-bold text-sky-800">{formatCad(revenue.estimatedAiCostCad)}</p>
+            </div>
+            <div className="rounded-lg border border-ink-100 bg-ink-50 px-3 py-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-ink-600">Marge estimée (proxy)</p>
+              <p className={revenue.estimatedMarginCad >= 0 ? "mt-1 text-sm font-bold text-emerald-700" : "mt-1 text-sm font-bold text-rose-700"}>
+                {formatCad(revenue.estimatedMarginCad)}
+              </p>
+            </div>
+          </div>
           {roi.protectedCad > 0 && (
             <p className="mt-2 text-xs leading-relaxed text-ink-500">
               Provenance : <span className="font-semibold text-ink-800">{formatCad(roi.protectedDeclaredCad)}</span> déclarés en appel ·{" "}
               <span className="font-semibold text-ink-800">{formatCad(roi.protectedEstimatedCad)}</span> estimés par barème.
             </p>
           )}
+          <p className="mt-2 text-xs leading-relaxed text-ink-500">
+            {revenue.assumption} La marge affichée est un proxy : argent protégé - coût IA estimé, hors téléphonie, taxes, salaires et revenus réellement encaissés.
+          </p>
           <dl className="mt-3 space-y-1.5 border-t border-ink-100 pt-3 text-xs text-ink-500">
             <div className="flex justify-between">
               <dt>Encore à risque (manqués non récupérés)</dt>

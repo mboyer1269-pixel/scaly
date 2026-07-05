@@ -123,6 +123,26 @@ describe("buildCallerMemory", () => {
     expect(mem!.confirmedFields.adresse).toBeUndefined();
     expect(mem!.confirmedFields.description).toBeUndefined();
   });
+
+  it("ignore les brouillons in_progress pour ne pas polluer le prochain prompt", () => {
+    const done = makeCall({
+      id: "final",
+      startedAt: "2026-06-09T14:00:00.000Z",
+      intelligence: { engine: "rules-v1", summary: "Dernier appel finalisé.", intent: "question_info", intentConfidence: 1, sentiment: "neutre", urgency: "normale", leadQuality: "tiede", estimatedValueCad: 0, valueBasis: "aucun", nextAction: "aucune", tags: [], commercialScore: 0, confidence: 1, finalStatus: "resolu_par_ia", collectedFields: {} },
+    });
+    const draft = makeCall({
+      id: "draft",
+      status: "in_progress",
+      startedAt: "2026-06-10T14:00:00.000Z",
+      provenance: { provider: "twilio", externalId: "CA_DRAFT", checkpointAt: "2026-06-10T14:01:00.000Z" },
+    });
+
+    const mem = buildCallerMemory([done, draft]);
+    expect(mem!.callCount).toBe(1);
+    expect(mem!.lastCallAt).toBe("2026-06-09");
+    expect(mem!.recentCalls.map((c) => c.summary)).toEqual(["Dernier appel finalisé."]);
+    expect(buildCallerMemory([draft])).toBeUndefined();
+  });
 });
 
 describe("selectCallerHistory — les deux gardes contre la fuite de mémoire", () => {
@@ -131,6 +151,7 @@ describe("selectCallerHistory — les deux gardes contre la fuite de mémoire", 
     makeCall({ id: "b", companyId: "comp_a", fromNumber: "819-421-1269", startedAt: "2026-06-08T14:00:00.000Z" }),
     makeCall({ id: "c", companyId: "comp_b", fromNumber: "+18194211269", startedAt: "2026-06-09T14:00:00.000Z" }),
     makeCall({ id: "d", companyId: "comp_a", fromNumber: "+15145550000", startedAt: "2026-06-07T14:00:00.000Z" }),
+    makeCall({ id: "e", companyId: "comp_a", fromNumber: "+18194211269", status: "in_progress", startedAt: "2026-06-11T14:00:00.000Z" }),
   ];
 
   it("numéro inconnu (jamais vu) → aucun historique → aucune mémoire", () => {

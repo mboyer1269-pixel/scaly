@@ -22,6 +22,8 @@ jobs:
           node-version: 20
           cache: npm
       - run: npm ci
+      # Scanner anti-secret : casse la CI si un credential réel est tracké.
+      - run: npm run security:check
       - run: npm run typecheck
       - run: npm test
       - run: npm run build

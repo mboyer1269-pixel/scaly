@@ -24,6 +24,7 @@ import type {
 import type { IndustryScript } from "@/domain/script";
 import { computeCommercialScore, estimateValueCad, type ValueTier } from "./scoring";
 import { intelligenceEngine, type AnalysisHints } from "./intelligence";
+import { getModelGateway } from "./model-gateway";
 
 export class LlmNotConfiguredError extends Error {
   constructor() {
@@ -91,7 +92,7 @@ const RESPONSE_SCHEMA = {
 
 function systemPrompt(script: IndustryScript): string {
   const fieldKeys = script.questions.map((q) => `${q.fieldKey}${q.required ? " (requis)" : ""}`).join(", ");
-  return `Tu es l'analyste d'appels de Scaly, une réceptionniste IA pour PME québécoises (français québécois et anglais).
+  return `Tu es l'analyste d'appels d'Allô Maude, une réceptionniste IA pour PME québécoises (français québécois et anglais).
 On te donne le transcript brut d'un appel téléphonique. Analyse-le UNIQUEMENT à partir de ce qui est dit.
 
 DÉFINITIONS D'INTENTION (choisis la raison d'appel dominante du point de vue de l'appelant) :
@@ -143,55 +144,25 @@ function clamp01(n: number): number {
   return Math.round(Math.max(0, Math.min(1, Number.isFinite(n) ? n : 0.5)) * 100) / 100;
 }
 
-async function callOpenAi(system: string, user: string): Promise<LlmRawAnalysis> {
+async function callOpenAi(call: Call, script: IndustryScript): Promise<LlmRawAnalysis> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new LlmNotConfiguredError();
   const model = process.env.SCALY_LLM_MODEL ?? "gpt-4o-mini";
-
-  let lastError: Error | null = null;
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 60_000);
-    try {
-      const res = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        signal: controller.signal,
-        body: JSON.stringify({
-          model,
-          temperature: 0,
-          messages: [
-            { role: "system", content: system },
-            { role: "user", content: user },
-          ],
-          response_format: {
-            type: "json_schema",
-            json_schema: { name: "call_intelligence", strict: true, schema: RESPONSE_SCHEMA },
-          },
-        }),
-      });
-      if (!res.ok) {
-        const body = await res.text();
-        const retriable = res.status === 429 || res.status >= 500;
-        const err = new Error(`OpenAI ${res.status} : ${body.slice(0, 300)}`);
-        if (!retriable) throw err;
-        lastError = err;
-      } else {
-        const data = (await res.json()) as { choices: { message: { content: string } }[] };
-        return JSON.parse(data.choices[0].message.content) as LlmRawAnalysis;
-      }
-    } catch (err) {
-      if (err instanceof LlmNotConfiguredError) throw err;
-      lastError = err instanceof Error ? err : new Error(String(err));
-      const msg = lastError.message;
-      // Erreurs non-retriables (4xx hors 429) : on sort tout de suite.
-      if (/OpenAI 4(?!29)/.test(msg)) throw lastError;
-    } finally {
-      clearTimeout(timer);
-    }
-    await new Promise((r) => setTimeout(r, attempt * 1500));
-  }
-  throw lastError ?? new Error("Échec OpenAI après 3 tentatives");
+  const result = await getModelGateway().createOpenAiJsonChatCompletion<LlmRawAnalysis>({
+    apiKey,
+    model,
+    feature: "call_analysis",
+    context: { companyId: call.companyId, callId: call.id, traceId: `call:${call.id}:analysis` },
+    messages: [
+      { role: "system", content: systemPrompt(script) },
+      { role: "user", content: userPrompt(call, script) },
+    ],
+    responseSchema: RESPONSE_SCHEMA,
+    schemaName: "call_intelligence",
+    retries: 2,
+    timeoutMs: 60_000,
+  });
+  return result.data;
 }
 
 export class LlmIntelligenceEngine {
@@ -206,7 +177,7 @@ export class LlmIntelligenceEngine {
     // Transcript vide : rien à comprendre — rules-v1 suffit et l'étiquette reste honnête.
     if (call.transcript.length === 0) return intelligenceEngine.analyze(call, script, hints);
 
-    const raw = await callOpenAi(systemPrompt(script), userPrompt(call, script));
+    const raw = await callOpenAi(call, script);
 
     const intent = pick(raw.intent, INTENTS, "autre");
     const urgency = pick(raw.urgency, URGENCIES, "normale");

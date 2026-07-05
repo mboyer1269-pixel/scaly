@@ -12,6 +12,7 @@ import { getStore } from "@/server/store";
 import { buildDailyDigest } from "@/services/digest";
 import { alertAlreadySent, buildOverageAlert, overageAuditDetail, OVERAGE_AUDIT_EVENT } from "@/services/overage";
 import { planQuoteFollowUps, quoteFollowUpsToExecute, revokedQuoteFollowUps } from "@/services/follow-up";
+import { expireStaleGapRecovery } from "@/services/gap-recovery";
 import { executeActionLive } from "@/services/action-engine";
 import { isSmsConfigured, sendSms } from "@/adapters/integrations/twilio-sms";
 
@@ -52,6 +53,14 @@ async function handle(req: Request) {
     for (const fu of followUps) {
       const executed = await executeActionLive(fu);
       await store.saveAction(executed);
+    }
+
+    // 1b) Offres de plage libérée sans réponse : expiration (48 h) — best-effort,
+    // le pouls du jour part quoi qu'il arrive.
+    try {
+      await expireStaleGapRecovery(company);
+    } catch {
+      // L'expiration réessaiera au prochain passage du cron.
     }
 
     // 2) Pouls du jour au propriétaire.

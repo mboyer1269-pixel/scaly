@@ -4,6 +4,7 @@ import { getStore } from "@/server/store";
 import { resolveCompanyId } from "@/server/tenant";
 import type { Company } from "@/domain/company";
 import { normalizeCoveragePolicy } from "@/services/coverage";
+import { normalizeReviewUrl } from "@/services/review-requests";
 import { isJsonObject, pickJsonFields } from "@/lib/request-body";
 
 export const dynamic = "force-dynamic";
@@ -52,6 +53,17 @@ export async function PUT(req: Request) {
     } catch (error) {
       return NextResponse.json(
         { error: error instanceof Error ? error.message : "Politique de couverture invalide" },
+        { status: 400 },
+      );
+    }
+  }
+  // reviewUrl : validé à part (trim + https uniquement, vide accepté).
+  if (Object.prototype.hasOwnProperty.call(body, "reviewUrl")) {
+    try {
+      patch.reviewUrl = normalizeReviewUrl(body.reviewUrl);
+    } catch (error) {
+      return NextResponse.json(
+        { error: error instanceof Error ? error.message : "Lien Google Review invalide" },
         { status: 400 },
       );
     }

@@ -11,6 +11,7 @@
 import type { Company, Industry, LanguageCode } from "@/domain/company";
 import type { VoiceAgentConfig } from "@/domain/agent";
 import { INDUSTRY_LABELS } from "@/domain/company";
+import { getModelGateway, type ModelGatewayContext } from "./model-gateway";
 
 export interface OnboardingDraft {
   name: string;
@@ -316,7 +317,11 @@ export async function fetchWebsiteText(url: string): Promise<string> {
 }
 
 /** Génère le brouillon via LLM (structured output strict, temperature 0). */
-export async function draftFromWebsite(url: string, blurb: string): Promise<{ draft: OnboardingDraft; sourceChars: number }> {
+export async function draftFromWebsite(
+  url: string,
+  blurb: string,
+  context: ModelGatewayContext = {},
+): Promise<{ draft: OnboardingDraft; sourceChars: number }> {
   const apiKey = process.env.OPENAI_API_KEY;
   if (!apiKey) throw new OnboardingNotConfiguredError();
 
@@ -331,30 +336,27 @@ export async function draftFromWebsite(url: string, blurb: string): Promise<{ dr
   }
 
   const model = process.env.SCALY_LLM_MODEL ?? "gpt-4o-mini";
-  const res = await fetch("https://api.openai.com/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({
-      model,
-      temperature: 0,
-      messages: [
-        {
-          role: "system",
-          content:
-            "Tu prépares le profil d'une réceptionniste IA pour une PME québécoise. À partir du texte du site web et de la description du propriétaire, produis un brouillon FACTUEL en français : n'invente JAMAIS un service ou une ville non mentionnés. En cas de doute, omets.",
-        },
-        {
-          role: "user",
-          content: `Description du propriétaire : ${blurb || "(aucune)"}\n\nTexte du site (${url}) :\n${siteText || "(site illisible)"}`,
-        },
-      ],
-      response_format: { type: "json_schema", json_schema: { name: "onboarding_draft", strict: true, schema: DRAFT_SCHEMA } },
-    }),
+  const normalizedUrl = new URL(url.startsWith("http") ? url : `https://${url}`);
+  const result = await getModelGateway().createOpenAiJsonChatCompletion<Record<string, unknown>>({
+    apiKey,
+    model,
+    feature: "onboarding_draft",
+    context: { ...context, traceId: context.traceId ?? `onboarding:${normalizedUrl.hostname}` },
+    messages: [
+      {
+        role: "system",
+        content:
+          "Tu prépares le profil d'une réceptionniste IA pour une PME québécoise. À partir du texte du site web et de la description du propriétaire, produis un brouillon FACTUEL en français : n'invente JAMAIS un service ou une ville non mentionnés. En cas de doute, omets.",
+      },
+      {
+        role: "user",
+        content: `Description du propriétaire : ${blurb || "(aucune)"}\n\nTexte du site (${url}) :\n${siteText || "(site illisible)"}`,
+      },
+    ],
+    responseSchema: DRAFT_SCHEMA,
+    schemaName: "onboarding_draft",
   });
-  if (!res.ok) throw new Error(`OpenAI ${res.status} : ${(await res.text()).slice(0, 200)}`);
-  const data = (await res.json()) as { choices: { message: { content: string } }[] };
-  const raw = JSON.parse(data.choices[0].message.content) as Record<string, unknown>;
-  const draft = validateDraft(raw, new URL(url.startsWith("http") ? url : `https://${url}`).hostname);
+  const draft = validateDraft(result.data, normalizedUrl.hostname);
   if (fetchNote) draft.understanding = `${draft.understanding} (NB : ${fetchNote})`;
   return { draft, sourceChars: siteText.length };
 }

@@ -29,9 +29,13 @@ export async function POST(req: Request) {
   }
 
   try {
-    const result = await draftFromWebsite(body.url.trim(), (body.blurb ?? "").slice(0, 600));
+    const companyId = await resolveCompanyId();
+    const result = await draftFromWebsite(body.url.trim(), (body.blurb ?? "").slice(0, 600), {
+      companyId,
+      traceId: `onboarding:${companyId}`,
+    });
     await getStore().recordAudit({
-      companyId: await resolveCompanyId(),
+      companyId,
       actor: "onboarding",
       event: "brouillon_genere",
       detail: `${body.url} · ${result.sourceChars} caractères analysés · en attente d'approbation`,
