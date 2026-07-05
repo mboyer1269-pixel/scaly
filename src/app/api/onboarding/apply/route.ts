@@ -7,7 +7,7 @@
  */
 import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
-import { resolveCompanyId } from "@/server/tenant";
+import { requireTenant } from "@/server/tenant";
 import { INDUSTRY_LABELS } from "@/domain/company";
 import { getScriptByIndustry } from "@/data/industry-scripts";
 import { validateDraft } from "@/services/onboarding";
@@ -28,8 +28,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Brouillon manquant" }, { status: 400 });
   }
 
+  const tenant = await requireTenant();
+  if ("block" in tenant) return NextResponse.json({ error: "Tenant authentifié requis." }, { status: 409 });
+  const companyId = tenant.companyId;
+
   const store = getStore();
-  const companyId = await resolveCompanyId();
   const existing = await store.getCompany(companyId);
   if (!existing) return NextResponse.json({ error: "Entreprise introuvable" }, { status: 404 });
 
