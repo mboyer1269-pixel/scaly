@@ -1,0 +1,6 @@
+interface:
+  display_name: "Scaly"
+  short_description: "Repo-specific patterns and workflows for scaly"
+  default_prompt: "Use the scaly repo skill to follow existing architecture, testing, and workflow conventions."
+policy:
+  allow_implicit_invocation: true
