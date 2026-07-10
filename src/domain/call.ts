@@ -6,7 +6,9 @@
 import type { LanguageCode } from "./company";
 
 export type CallDirection = "inbound" | "outbound";
-export type CallStatus = "completed" | "missed" | "transferred" | "voicemail" | "abandoned";
+/** "in_progress" = brouillon checkpointé par le pont realtime — l'appel est en cours,
+ *  aucun moteur métier (rescue, analytics, actions) ne doit le traiter comme final. */
+export type CallStatus = "completed" | "missed" | "transferred" | "voicemail" | "abandoned" | "in_progress";
 /** Provenance honnête de l'appel : aucun appel "live" n'existe encore (P2). */
 export type CallSource = "simulator" | "seed_curated" | "live";
 
@@ -107,6 +109,9 @@ export interface Call {
     provider?: string;
     externalId?: string;
     verifiedAt?: string;
+    /** Présent = brouillon vivant (checkpoint du pont). Retiré à la finalisation
+     *  (/api/voice/complete ou repli humain) — son absence rend le retry idempotent. */
+    checkpointAt?: string;
   };
   /** HONNÊTETÉ : null tant que l'enregistrement réel (Twilio) n'est pas branché. */
   recordingUrl: null;

@@ -18,7 +18,7 @@ const MAX_SUMMARY_CHARS = 150;
 export function selectCallerHistory(calls: Call[], companyId: string, fromNumber: string): Call[] {
   const canon = canonicalPhone(fromNumber);
   if (canon.length !== 10) return [];
-  return calls.filter((c) => c.companyId === companyId && canonicalPhone(c.fromNumber) === canon);
+  return calls.filter((c) => c.status !== "in_progress" && c.companyId === companyId && canonicalPhone(c.fromNumber) === canon);
 }
 
 /**
@@ -32,10 +32,11 @@ export function selectCallerHistory(calls: Call[], companyId: string, fromNumber
  *  - summary tronqué à 150 chars pour ne pas polluer le prompt.
  */
 export function buildCallerMemory(calls: Call[]): CallerMemory | undefined {
-  if (calls.length === 0) return undefined;
+  const finalCalls = calls.filter((c) => c.status !== "in_progress");
+  if (finalCalls.length === 0) return undefined;
 
   // Plus récent en premier — base de toute la logique
-  const sorted = [...calls].sort(
+  const sorted = [...finalCalls].sort(
     (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime(),
   );
 
@@ -75,7 +76,7 @@ export function buildCallerMemory(calls: Call[]): CallerMemory | undefined {
   });
 
   return {
-    callCount: calls.length,
+    callCount: finalCalls.length,
     firstCallAt: sorted[sorted.length - 1].startedAt.slice(0, 10),
     lastCallAt: sorted[0].startedAt.slice(0, 10),
     ...(name !== undefined ? { name } : {}),

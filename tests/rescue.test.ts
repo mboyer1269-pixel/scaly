@@ -142,3 +142,24 @@ describe("computeRoiSnapshot", () => {
     expect(roi.multiple).toBe(Math.round((1200 / roi.planPriceCad) * 10) / 10);
   });
 });
+
+describe("computeDashboard", () => {
+  it("ignore les brouillons in_progress dans les agrégats métier", () => {
+    const done = call({ id: "done", minutesAgo: 30, status: "completed", durationSec: 120 });
+    const draft = call({
+      id: "draft",
+      minutesAgo: 5,
+      status: "in_progress",
+      durationSec: 300,
+      provenance: { provider: "twilio", externalId: "CA_DRAFT", checkpointAt: NOW.toISOString() },
+    });
+
+    const d = computeDashboard(company, [done, draft], [], 14, NOW);
+
+    expect(d.callsTotal).toBe(1);
+    expect(d.answeredByAi).toBe(1);
+    expect(d.avgDurationSec).toBe(120);
+    expect(d.recentCalls.map((c) => c.id)).toEqual(["done"]);
+    expect(d.byDay.reduce((sum, day) => sum + day.total, 0)).toBe(1);
+  });
+});

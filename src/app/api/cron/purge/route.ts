@@ -6,6 +6,7 @@
  */
 import { NextResponse } from "next/server";
 import { getStore } from "@/server/store";
+import { checkpointStaleMinutesFromEnv, expireStaleCheckpoints } from "@/services/checkpoint-expiry";
 
 export const dynamic = "force-dynamic";
 
@@ -17,8 +18,11 @@ async function handle(req: Request) {
   if (req.headers.get("authorization") !== `Bearer ${secret}`) {
     return NextResponse.json({ error: "Non autorisé" }, { status: 401 });
   }
-  const result = await getStore().purgeExpiredTranscripts();
-  return NextResponse.json({ ok: true, ...result, at: new Date().toISOString() });
+  const store = getStore();
+  const result = await store.purgeExpiredTranscripts();
+  // Brouillons in_progress orphelins (double panne pont + callback) → abandoned.
+  const stale = await expireStaleCheckpoints(store, { staleMinutes: checkpointStaleMinutesFromEnv() });
+  return NextResponse.json({ ok: true, ...result, staleCheckpoints: stale.expired, at: new Date().toISOString() });
 }
 
 export const GET = handle;

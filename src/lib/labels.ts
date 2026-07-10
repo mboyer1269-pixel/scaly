@@ -30,6 +30,7 @@ export function callStatusBadge(s: CallStatus): { label: string; tone: Tone } {
     case "transferred": return { label: "Transféré", tone: "violet" };
     case "voicemail": return { label: "Boîte vocale", tone: "slate" };
     case "abandoned": return { label: "Abandonné", tone: "amber" };
+    case "in_progress": return { label: "En cours", tone: "sky" };
   }
 }
 
