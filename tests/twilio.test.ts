@@ -46,6 +46,27 @@ describe("TwiML", () => {
     expect(xml).toContain(`<Parameter name="companyId" value="comp_belair" />`);
   });
 
+  it("Connect/Stream porte l'action de repli — un stream mort renvoie vers /api/voice/fallback", () => {
+    const xml = twimlConnectStream("wss://realtime.scaly.ca/twilio", { callSid: "CA123" }, "/api/voice/fallback");
+    expect(xml).toContain(`<Connect action="/api/voice/fallback"><Stream`);
+  });
+
+  it("Connect/ConversationRelay porte aussi l'action de repli", () => {
+    const xml = twimlConnectRelay(
+      "wss://relay.scaly.ca/relay",
+      {
+        welcomeGreeting: "Bonjour !",
+        language: "fr-CA",
+        ttsProvider: "Amazon",
+        voice: "Gabrielle-Neural",
+        transcriptionProvider: "Google",
+      },
+      {},
+      "/api/voice/fallback",
+    );
+    expect(xml).toContain(`<Connect action="/api/voice/fallback"><ConversationRelay`);
+  });
+
   it("repli : message FR-CA puis <Dial> vers l'humain — le téléphone ne casse jamais", () => {
     const xml = twimlFallbackTransfer({ to: "514-555-0001", lang: "fr", companyName: "Plomberie Bélair" });
     expect(xml).toContain(`language="fr-CA"`);

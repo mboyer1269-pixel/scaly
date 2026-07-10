@@ -2,7 +2,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import clsx from "clsx";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, FileDown } from "lucide-react";
 import { getStore } from "@/server/store";
 import { getSessionRole } from "@/server/auth";
 import { resolveCompanyId } from "@/server/tenant";
@@ -47,6 +47,16 @@ export default async function CallDetailPage({ params }: { params: Promise<{ id:
           <Badge tone={l.tone}>Lead : {l.label}</Badge>
           <RealityBadge reality={reality} />
           {intel?.saved && <Badge tone="emerald">Appel sauvé ({intel.saved.reason === "hors_heures" ? "hors heures" : "rappel SMS"})</Badge>}
+          {call.status !== "in_progress" && (
+            <a
+              href={`/api/calls/${call.id}/evidence`}
+              download
+              className="inline-flex items-center gap-1 rounded-lg border border-ink-200 px-2.5 py-1 text-xs font-medium text-ink-600 hover:bg-ink-50"
+              title="Dossier d'appel horodaté et vérifiable (empreinte SHA-256)"
+            >
+              <FileDown size={12} /> Dossier d'appel
+            </a>
+          )}
         </div>
       </PageHeader>
 

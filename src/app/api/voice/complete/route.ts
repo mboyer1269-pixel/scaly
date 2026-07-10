@@ -11,6 +11,7 @@ import { intelligenceEngine } from "@/services/intelligence";
 import { planActionsForCall } from "@/services/action-engine";
 import { consentFromCall } from "@/services/consent";
 import { isSmsConfigured, sendSms } from "@/adapters/integrations/twilio-sms";
+import { isCheckpointDraft } from "@/server/voice-fallback";
 import { newId } from "@/lib/format";
 import type { Call, TranscriptTurn } from "@/domain/call";
 import type { LanguageCode } from "@/domain/company";
@@ -56,6 +57,20 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: `Contexte incomplet pour ${body.companyId}` }, { status: 404 });
   }
 
+  // Idempotence : un retry Twilio réutilise le même callSid. Ne recrée ni appel,
+  // ni action ni audit — retourne l'appel existant.
+  // Exception : un brouillon checkpointé (pont encore en vie au moment du flush)
+  // n'est PAS un final — il est remplacé EN PLACE (même id, addCall upsert).
+  let draftId: string | undefined;
+  if (body.callSid) {
+    const existing = await store.findCallByExternalId(company.id, body.callSid);
+    if (existing) {
+      if (!isCheckpointDraft(existing)) {
+        return NextResponse.json({ callId: existing.id, actionsPlanned: 0, idempotent: true });
+      }
+      draftId = existing.id;
+    }
+  }
   const turns = body.turns;
   const langOf = (l?: string): LanguageCode => (l === "en" ? "en" : company.defaultLanguage);
   const transcript: TranscriptTurn[] = turns.map((t) => ({
@@ -68,7 +83,7 @@ export async function POST(req: Request) {
   const measured = turns.map((t) => t.latency).filter((l): l is VoiceTurnLatency => Boolean(l && !l.simulated));
 
   const call: Call = {
-    id: newId("call"),
+    id: draftId ?? newId("call"),
     companyId: company.id,
     direction: "inbound",
     status: body.transferred ? "transferred" : "completed",
@@ -80,6 +95,7 @@ export async function POST(req: Request) {
     scriptId: script.id,
     transcript,
     recordingUrl: null,
+    provenance: body.callSid ? { provider: "twilio", externalId: body.callSid } : undefined,
   };
   call.intelligence = intelligenceEngine.analyze(call, script, {
     transferred: Boolean(body.transferred),

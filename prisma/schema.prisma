@@ -113,6 +113,7 @@ model Call {
   transcript   Json     // TranscriptTurn[]
   intelligence Json?    // CallIntelligence
   recordingUrl String?
+  provenance   Json?    // Provider metadata, including Twilio callSid
 
   company Company  @relation(fields: [companyId], references: [id])
   actions Action[]

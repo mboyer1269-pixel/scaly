@@ -46,12 +46,23 @@ export function verifyRelaySessionToken(secret: string, identity: RelaySessionId
   return a.length === b.length && timingSafeEqual(a, b);
 }
 
+/**
+ * Attribut `action` de <Connect> : Twilio requête cette URL quand le stream se
+ * termine ALORS QUE l'appel est encore actif (WS injoignable, pont crashé, WS
+ * fermé côté serveur). Sans lui, l'appel tombe en silence — avec lui, la route
+ * de repli répond <Dial> vers l'humain. Fin normale = l'appelant raccroche →
+ * Twilio ignore le TwiML retourné.
+ */
+function connectActionAttr(action?: string): string {
+  return action ? ` action="${xmlEscape(action)}"` : "";
+}
+
 /** TwiML : ouvre le Media Stream bidirectionnel vers scaly-realtime. */
-export function twimlConnectStream(wsUrl: string, parameters: Record<string, string> = {}): string {
+export function twimlConnectStream(wsUrl: string, parameters: Record<string, string> = {}, action?: string): string {
   const params = Object.entries(parameters)
     .map(([name, value]) => `<Parameter name="${xmlEscape(name)}" value="${xmlEscape(value)}" />`)
     .join("");
-  return `<?xml version="1.0" encoding="UTF-8"?><Response><Connect><Stream url="${xmlEscape(wsUrl)}">${params}</Stream></Connect></Response>`;
+  return `<?xml version="1.0" encoding="UTF-8"?><Response><Connect${connectActionAttr(action)}><Stream url="${xmlEscape(wsUrl)}">${params}</Stream></Connect></Response>`;
 }
 
 /** Options voix du prototype ConversationRelay — Twilio porte l'ASR et la TTS. */
@@ -71,7 +82,7 @@ export interface RelayTwimlOptions {
 }
 
 /** TwiML : ouvre une session ConversationRelay vers le prototype A/B. */
-export function twimlConnectRelay(wsUrl: string, opts: RelayTwimlOptions, parameters: Record<string, string> = {}): string {
+export function twimlConnectRelay(wsUrl: string, opts: RelayTwimlOptions, parameters: Record<string, string> = {}, action?: string): string {
   const attrs =
     `url="${xmlEscape(wsUrl)}" welcomeGreeting="${xmlEscape(opts.welcomeGreeting)}" ` +
     `language="${xmlEscape(opts.language)}" ttsProvider="${xmlEscape(opts.ttsProvider)}" voice="${xmlEscape(opts.voice)}" ` +
@@ -80,7 +91,7 @@ export function twimlConnectRelay(wsUrl: string, opts: RelayTwimlOptions, parame
   const params = Object.entries(parameters)
     .map(([name, value]) => `<Parameter name="${xmlEscape(name)}" value="${xmlEscape(value)}" />`)
     .join("");
-  return `<?xml version="1.0" encoding="UTF-8"?><Response><Connect><ConversationRelay ${attrs}>${params}</ConversationRelay></Connect></Response>`;
+  return `<?xml version="1.0" encoding="UTF-8"?><Response><Connect${connectActionAttr(action)}><ConversationRelay ${attrs}>${params}</ConversationRelay></Connect></Response>`;
 }
 
 /**
